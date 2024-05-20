@@ -1,0 +1,22 @@
+{
+    "$schema": "https://raw.githubusercontent.com/Cog-Creators/Red-DiscordBot/V3/develop/schema/red_cog.schema.json",
+    "name": "CogChat",
+    "short": "Chat with an LLM in Discord!",
+    "description": "Intermediatory for Discord bot and OpenAI compatible APIs",
+    "end_user_data_statement": "This cog stores chat history for purpose of generating responses.",
+    "install_msg": "Installed! Configure with [p]cogchat configure",
+    "author": [
+        "Spaghet"
+    ],
+    "required_cogs": {},
+    "requirements": [],
+    "tags": [
+        "tag1",
+        "tag2",
+        "tag3"
+    ],
+    "min_bot_version": "3.5.0",
+    "hidden": false,
+    "disabled": false,
+    "type": "COG"
+}
