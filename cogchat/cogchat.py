@@ -1,13 +1,13 @@
 import os
+import re
 import json
 import requests
 import sseclient  # pip install sseclient-py
+import textwrap
 
 from redbot.core import commands
 from redbot.core.bot import Red
 from redbot.core.config import Config
-
-RequestType = Literal["discord_deleted_user", "owner", "user", "user_strict"]
 
 
 class CogChat(commands.Cog):
@@ -22,7 +22,7 @@ class CogChat(commands.Cog):
             identifier=133041100356059137,
             force_registration=True,
         )
-        self.llm_server_url = "http://127.0.0.1:5000/v1/chat/completions"
+        self.llm_server_url = "http://127.0.0.1:5000/v1/completions"
         self.config_dir = "config"
         self.listening_channels = {}  # Dictionary to track which channels are being listened to
     
@@ -102,7 +102,12 @@ class CogChat(commands.Cog):
             
     @commands.Cog.listener()
     async def on_message(self, message):
+
         if message.author.bot:
+            return
+
+        prefixes = await self.bot.get_valid_prefixes(message.guild)
+        if any(message.content.startswith(prefix) for prefix in prefixes):
             return
 
         if message.channel.id in self.listening_channels:
@@ -116,16 +121,38 @@ class CogChat(commands.Cog):
             with open(channel_config_path, 'r') as config_file:
                 channel_config = json.load(config_file)
             
-            channel_config['chat_history'].append(
-                {
-                    "role": "user",
-                    "content": f"{message.author.nick if message.author.nick else message.author.name}: {message.content}"
-                }
-            )
+            channel_config['chat_history'].append(f"{message.author.nick if message.author.nick else message.author.name}: {message.content}")
+            with open(os.path.join(self.config_dir, "characters", f"{channel_config['character']}.json"), 'r') as config_file:
+                character = json.load(config_file)
+
+
+            rendered_history = "\n".join(channel_config['chat_history'])
+
+            prompt = textwrap.dedent(f"""
+                You are in a chat room with multiple participants.
+                Below is a transcript of recent messages in the conversation.
+                Write the next one to three messages that you would send in this
+                conversation, from the point of view of the participant named
+                {character['Name']}.
+
+                {character['Persona']}
+
+                All responses you write must be from the point of view of
+                {character['Name']}.
+
+                ### Transcript:
+                {rendered_history}
+                {character['Name']}:
+            """)
+
+
             data = {
-                "mode": "chat",
-                "character": channel_config["character"],
-                "messages": channel_config["chat_history"]
+                "prompt": prompt,
+                "stream": True,
+                "max_tokens": channel_config["max_tokens"] if channel_config["max_tokens"] is not None else 200,
+                "stop":[
+                    ":"
+                ]
             }
             
             # Send the request to the LLM server
@@ -139,28 +166,42 @@ class CogChat(commands.Cog):
             client = sseclient.SSEClient(stream_response)
             assistant_message = ''
             message_store = []
+            # Regex pattern to match sentence-ending punctuation or newline
+            pattern = r'([.!?])|\n'
+
             for event in client.events():
                 payload = json.loads(event.data)
-                chunk = payload['choices'][0]['message']['content']
+                print(payload)
+                chunk = payload['choices'][0]['text']
                 assistant_message += chunk
 
-                while "\n" in assistant_message:
-                    line, assistant_message = assistant_message.split("\n", 1)
-                    line = line.strip()
-                    if line:
-                        await message.channel.send(line)
-                        message_store.append(line)
-            
-            # Send any remaining text that didn't end with a newline
+                # Split the message using the regex pattern
+                parts = re.split(pattern, assistant_message)
+
+                # Process each part
+                i = 0
+                while i < len(parts) - 1:
+                    part = parts[i]
+                    if part and part.strip():
+                        part = part.strip()
+                        # Check if the next part is a punctuation mark
+                        if i + 1 < len(parts) and parts[i + 1] in ['.', '!', '?']:
+                            part += parts[i + 1]  # Append the punctuation mark
+                            i += 1  # Skip the punctuation mark in the next iteration
+                        await message.channel.send(part)
+                        message_store.append(part)
+                    i += 1
+
+                # Keep the last part (which may be an incomplete message) in assistant_message
+                assistant_message = parts[-1]
+
+            # Send any remaining text that didn't end with a punctuation or newline
             if assistant_message.strip():
                 await message.channel.send(assistant_message.strip())
                 message_store.append(assistant_message.strip())
+
+            assistant_message = "\n".join(message_store)
             
-            channel_config['chat_history'].append(
-                {
-                    "role": "assistant",
-                    "content": "\n".join(message_store)
-                }
-            )
+            channel_config['chat_history'].append(f"{channel_config['character']}: {assistant_message}")
             with open(channel_config_path, 'w') as config_file:
                 json.dump(channel_config, config_file, indent=4)
