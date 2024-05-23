@@ -26,7 +26,7 @@ class CogChat(commands.Cog):
             identifier=133041100356059137,
             force_registration=True,
         )
-        self.llm_server_url = "http://127.0.0.1:5000/v1/completions"
+        self.llm_server_url = "http://127.0.0.1:5000/v1/chat/completions"
         self.config_dir = "config"
         self.listening_channels = set()  # set to track which channels are being listened to
         self.persona_creation_state = {} # Temporary state to track persona creation
