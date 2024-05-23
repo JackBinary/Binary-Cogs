@@ -38,54 +38,57 @@ class CogChat(commands.Cog):
     async def cogchat(self, ctx, *, text: str):
         """Base command for CogChat."""
         command_array = text.split(" ")
-        
-        match command_array[0]:
-            case "register":
-                await register_channel(self, ctx)
-            case "remove":
-                await remove_channel(self, ctx)
-            case "start":
-                await start_listening(self, ctx)
-            case "stop":
-                await stop_listening(self, ctx)
-            case "configure":
-                channel_id = str(ctx.channel.id)
-                guild_id = str(ctx.guild.id)
-                try:
-                    match command_array[1]:
-                        case "character":
-                            await update_channel_config(channel_id, guild_id, "character", command_array[2], self.config_dir)
-                            await ctx.send(f"Character updated to {command_array[2]}.")
-                        case "temperature":
-                            await update_channel_config(channel_id, guild_id, "temperature", value, self.config_dir)
-                            await ctx.send(f"Temperature updated to {value}.")
-                        case "max_tokens":
-                            await update_channel_config(channel_id, guild_id, "max_tokens", value, self.config_dir)
-                            await ctx.send(f"Max Tokens updated to {value}.")
-                except IndexError: # too few arguments
-                    await ctx.send("Usage: `[p]cogchat configure [character|temperature|max_tokens] <value>`")
-            case "character":
-                try:
-                    match command_array[1]:
-                        case "create":
-                            await create_character(character_name, self.config_dir)
-                            await ctx.send(f"{command_array[2]} Created! Add a persona with `[p]cogchat character persona <character> new`")
-                        case "delete":
-                            await delete_character(character_name, self.config_dir)
-                            await ctx.send(f"Character {command_array[2]} deleted.")
-                        case "persona":
-                            try:
-                                match command_array[3]:
-                                    case "show":
-                                        persona = await show_persona(character_name, self.config_dir)
-                                        await ctx.send(f"Persona for {character_name}: {persona}")
-                                    case "new":
-                                        self.persona_creation_state[ctx.author.id] = command_array[2]
-                                        await ctx.send(f"Please describe {command_array[2]}.")
-                            except IndexError: # too few arguments
-                                await ctx.send("Usage: `[p]cogchat character persona <character> [new|show]`")
-                except IndexError: # too few arguments
-                    await ctx.send("Usage: `[p]cogchat character [create|delete|persona] <character>`")
+
+        try:
+            match command_array[0]:
+                case "register":
+                    await register_channel(self, ctx)
+                case "remove":
+                    await remove_channel(self, ctx)
+                case "start":
+                    await start_listening(self, ctx)
+                case "stop":
+                    await stop_listening(self, ctx)
+                case "configure":
+                    channel_id = str(ctx.channel.id)
+                    guild_id = str(ctx.guild.id)
+                    try:
+                        match command_array[1]:
+                            case "character":
+                                await update_channel_config(channel_id, guild_id, "character", command_array[2], self.config_dir)
+                                await ctx.send(f"Character updated to {command_array[2]}.")
+                            case "temperature":
+                                await update_channel_config(channel_id, guild_id, "temperature", value, self.config_dir)
+                                await ctx.send(f"Temperature updated to {command_array[2]}.")
+                            case "max_tokens":
+                                await update_channel_config(channel_id, guild_id, "max_tokens", value, self.config_dir)
+                                await ctx.send(f"Max Tokens updated to {command_array[2]}.")
+                    except IndexError: # too few arguments
+                        await ctx.send("Usage: `[p]cogchat configure [character|temperature|max_tokens] <value>`")
+                case "character":
+                    try:
+                        match command_array[1]:
+                            case "create":
+                                await create_character(character_name, self.config_dir)
+                                await ctx.send(f"{command_array[2]} Created! Add a persona with `[p]cogchat character persona <character> new`")
+                            case "delete":
+                                await delete_character(character_name, self.config_dir)
+                                await ctx.send(f"Character {command_array[2]} deleted.")
+                            case "persona":
+                                try:
+                                    match command_array[3]:
+                                        case "show":
+                                            persona = await show_persona(character_name, self.config_dir)
+                                            await ctx.send(f"Persona for {character_name}: {persona}")
+                                        case "new":
+                                            self.persona_creation_state[ctx.author.id] = command_array[2]
+                                            await ctx.send(f"Please describe {command_array[2]}.")
+                                except IndexError: # too few arguments
+                                    await ctx.send("Usage: `[p]cogchat character persona <character> [new|show]`")
+                    except IndexError: # too few arguments
+                        await ctx.send("Usage: `[p]cogchat character [create|delete|persona] <character>`")
+        except IndexError: # too few arguments
+            await ctx.send("Usage: `[p]cogchat [register|remove|start|stop|configure|character]`")
 
 
     @commands.Cog.listener()
