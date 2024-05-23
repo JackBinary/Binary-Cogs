@@ -29,12 +29,12 @@ async def register_channel(cog, ctx):
         await ctx.send(f"Channel {ctx.channel.name} in guild {ctx.guild.name} is already registered.")
         
 async def start_listening(cog, ctx):
-    cog.listening_channels[ctx.channel.id] = True
+    cog.listening_channels.add(ctx.channel.id)
     await ctx.send(f"Listening to channel {ctx.channel.name}.")
     
 async def stop_listening(cog, ctx):
     if ctx.channel.id in cog.listening_channels:
-        cog.listening_channels.pop(ctx.channel.id)
+        cog.listening_channels.remove(ctx.channel.id)
         await ctx.send(f"Stopped listening to channel {ctx.channel.name}.")
     else:
         await ctx.send(f"Channel {ctx.channel.name} is not being listened to.")
