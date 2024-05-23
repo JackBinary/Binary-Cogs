@@ -80,7 +80,8 @@ class CogChat(commands.Cog):
                                         persona = await show_persona(character_name, self.config_dir)
                                         await ctx.send(f"Persona for {character_name}: {persona}")
                                     case "new":
-                                        await update_persona(command_array[2], " ".join(command_array[4:]), self.config_dir)
+                                        self.persona_creation_state[ctx.author.id] = command_array[2]
+                                        await ctx.send(f"Please describe {command_array[2]}.")
                             except IndexError: # too few arguments
                                 await ctx.send("Usage: `[p]cogchat character persona <character> [new|show]`")
                 except IndexError: # too few arguments
