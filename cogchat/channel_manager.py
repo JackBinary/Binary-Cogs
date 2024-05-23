@@ -17,9 +17,7 @@ async def register_channel(cog, ctx):
         channel_config = {
             "character": "Assistant",
             "temperature": None,
-            "top_p": None,
             "max_tokens": None,
-            "seed": None,
             "chat_history": []
         }
         with open(channel_config_path, 'w') as config_file:
