@@ -1,14 +1,14 @@
 import json
 import os
 
-async def create_character(character_name, character_persona, config_dir):
+async def create_character(character_name, config_dir):
     characters_dir = os.path.join(config_dir, "characters")
     if not os.path.exists(characters_dir):
         os.makedirs(characters_dir)
     character_path = os.path.join(characters_dir, f"{character_name}.json")
     character_config = {
         "Name": character_name,
-        "Persona": character_persona
+        "Persona": None
     }
     with open(character_path, 'w') as config_file:
         json.dump(character_config, config_file, indent=4)
