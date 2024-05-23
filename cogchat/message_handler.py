@@ -51,8 +51,11 @@ async def handle_message(cog, message):
             "mode": "instruct",
             "messages": [{"role": "user", "content": prompt}],
             "stream": True,
-            "max_tokens": channel_config["max_tokens"] if channel_config["max_tokens"] is not None else 200
         }
+        if channel_config["max_tokens"]:
+            data["max_tokens"] = channel_config["max_tokens"]
+        if channel_config["temperature"]:
+            data["temperature"] = channel_config["temperature"]
         
         # Send the request to the LLM server
         stream_response = requests.post(
