@@ -48,12 +48,10 @@ async def handle_message(cog, message):
         """)
 
         data = {
-            "prompt": prompt,
+            "mode": "instruct",
+            "messages": [{"role": "user", "content": prompt}],
             "stream": True,
-            "max_tokens": channel_config["max_tokens"] if channel_config["max_tokens"] is not None else 200,
-            "stop":[
-                ":"
-            ]
+            "max_tokens": channel_config["max_tokens"] if channel_config["max_tokens"] is not None else 200
         }
         
         # Send the request to the LLM server
