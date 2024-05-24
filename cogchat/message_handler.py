@@ -90,6 +90,7 @@ async def handle_message(cog, message):
                     if i + 1 < len(parts) and re.match(pattern, parts[i + 1]):
                         part += parts[i + 1]
                         i += 1  # Skip the punctuation mark in the next iteration
+                    part = part.replace(f"{character['Name']}:","")
                     if part:
                         await message.channel.send(part)
                         message_store.append(part)
