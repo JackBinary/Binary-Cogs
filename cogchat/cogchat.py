@@ -95,6 +95,11 @@ class CogChat(commands.Cog):
     async def on_message(self, message):
         if message.author.bot:
             return
+
+        prefixes = await self.bot.get_valid_prefixes(message.guild)
+        if any(message.content.startswith(prefix) for prefix in prefixes):
+            return
+        
         if message.author.id in self.persona_creation_state:
             character_name = self.persona_creation_state.pop(message.author.id)
             await update_persona(character_name, message.content, self.config_dir)
