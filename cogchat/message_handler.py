@@ -33,20 +33,18 @@ async def handle_message(cog, message):
         prompt = textwrap.dedent(f"""
             You are in a chat room with multiple participants.
             Below is a transcript of recent messages in the conversation.
-            Write the next one to three messages that you would send in this
-            conversation, from the point of view of the participant named
-            {character['Name']}.
+            Write the next one to three messages that you would send in this conversation, from the point of view of the participant named {character['Name']}.
+            Do not speak for any other participants. Your responses should be in the style described in your persona.
 
             {character['Persona']}
 
-            All responses you write must be from the point of view of
-            {character['Name']}.
+            All responses you write must be from the point of view of {character['Name']} and only {character['Name']}. Do not generate text for other participants.
 
-            NEVER attempt to speak for another user, other than {character['Name']}.
 
             ### Transcript:
             {rendered_history}
-            {character['Name']}:
+
+            Based on the transcript above, what should {character['Name']} say next?
         """)
 
         data = {
