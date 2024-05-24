@@ -58,10 +58,10 @@ class CogChat(commands.Cog):
                                 await update_channel_config(channel_id, guild_id, "character", command_array[2], self.config_dir)
                                 await ctx.send(f"Character updated to {command_array[2]}.")
                             case "temperature":
-                                await update_channel_config(channel_id, guild_id, "temperature", float(command_array[2], self.config_dir)
+                                await update_channel_config(channel_id, guild_id, "temperature", float(command_array[2]), self.config_dir)
                                 await ctx.send(f"Temperature updated to {command_array[2]}.")
                             case "max_tokens":
-                                await update_channel_config(channel_id, guild_id, "max_tokens", int(command_array[2], self.config_dir)
+                                await update_channel_config(channel_id, guild_id, "max_tokens", int(command_array[2]), self.config_dir)
                                 await ctx.send(f"Max Tokens updated to {command_array[2]}.")
                     except IndexError: # too few arguments
                         await ctx.send("Usage: `[p]cogchat configure [character|temperature|max_tokens] <value>`")
