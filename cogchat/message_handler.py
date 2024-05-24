@@ -45,6 +45,8 @@ async def handle_message(cog, message):
             {rendered_history}
 
             Based on the transcript above, what should {character['Name']} say next?
+            Do not put quotes around dialogue, instead, describe actions within asterisks (eg. *waves*)
+            Do not begin your message with any form of {character['Name']}: or {character['Name']} says:
         """)
 
         data = {
