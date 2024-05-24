@@ -40,7 +40,6 @@ async def handle_message(cog, message):
 
             All responses you write must be from the point of view of {character['Name']} and only {character['Name']}. Do not generate text for other participants.
 
-
             ### Transcript:
             {rendered_history}
 
@@ -70,8 +69,8 @@ async def handle_message(cog, message):
         client = sseclient.SSEClient(stream_response)
         assistant_message = ''
         message_store = []
-        # Regex pattern to match sentence-ending punctuation or newline
-        pattern = r'([.!?])|\n'
+        # Regex pattern to match any number of punctuation marks (., !, ?, ...) or newline
+        pattern = r'([.!?]+|\n)'
 
         for event in client.events():
             payload = json.loads(event.data)
@@ -85,24 +84,24 @@ async def handle_message(cog, message):
             # Process each part
             i = 0
             while i < len(parts) - 1:
-                part = parts[i]
-                if part and part.strip():
-                    part = part.strip()
-                    # Check if the next part is a punctuation mark
-                    if i + 1 < len(parts) and parts[i + 1] in ['.', '!', '?']:
-                        part += parts[i + 1]  # Append the punctuation mark
+                part = parts[i].strip()
+                if part:
+                    # Check if the next part is a punctuation mark or ellipsis
+                    if i + 1 < len(parts) and re.match(pattern, parts[i + 1]):
+                        part += parts[i + 1]
                         i += 1  # Skip the punctuation mark in the next iteration
-                    await message.channel.send(part)
-                    message_store.append(part)
+                    if part:
+                        await message.channel.send(part)
+                        message_store.append(part)
                 i += 1
 
             # Keep the last part (which may be an incomplete message) in assistant_message
-            assistant_message = parts[-1]
+            assistant_message = parts[-1].strip()
 
         # Send any remaining text that didn't end with a punctuation or newline
-        if assistant_message.strip():
-            await message.channel.send(assistant_message.strip())
-            message_store.append(assistant_message.strip())
+        if assistant_message:
+            await message.channel.send(assistant_message)
+            message_store.append(assistant_message)
 
         assistant_message = "\n".join(message_store)
         
