@@ -69,17 +69,17 @@ class CogChat(commands.Cog):
                     try:
                         match command_array[1]:
                             case "create":
-                                await create_character(character_name, self.config_dir)
+                                await create_character(command_array[2], self.config_dir)
                                 await ctx.send(f"{command_array[2]} Created! Add a persona with `[p]cogchat character persona <character> new`")
                             case "delete":
-                                await delete_character(character_name, self.config_dir)
+                                await delete_character(command_array[2], self.config_dir)
                                 await ctx.send(f"Character {command_array[2]} deleted.")
                             case "persona":
                                 try:
                                     match command_array[3]:
                                         case "show":
-                                            persona = await show_persona(character_name, self.config_dir)
-                                            await ctx.send(f"Persona for {character_name}: {persona}")
+                                            persona = await show_persona(command_array[2], self.config_dir)
+                                            await ctx.send(f"Persona for {command_array[2]}: {persona}")
                                         case "new":
                                             self.persona_creation_state[ctx.author.id] = command_array[2]
                                             await ctx.send(f"Please describe {command_array[2]}.")
