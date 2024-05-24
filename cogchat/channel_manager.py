@@ -43,6 +43,6 @@ async def remove_channel(cog, ctx):
     if ctx.channel.id in cog.listening_channels:
         await ctx.send(f"Unable to remove listening channel. Stop the channel with `[p]cogchat stop`")
     else:
-        if os.path.exists(os.path.join(cog.config_dir, guild_id, channel_id)):
-            os.remove(channel_id)
+        if os.path.exists(os.path.join(cog.config_dir, guild_id, f"{channel_id}.json")):
+            os.remove(os.path.join(cog.config_dir, guild_id, f"{channel_id}.json"))
         await ctx.send(f"Channel config removed")
