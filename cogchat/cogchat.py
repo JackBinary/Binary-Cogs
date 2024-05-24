@@ -79,7 +79,9 @@ class CogChat(commands.Cog):
                                     match command_array[3]:
                                         case "show":
                                             persona = await show_persona(command_array[2], self.config_dir)
-                                            await ctx.send(f"Persona for {command_array[2]}: {persona}")
+                                            await ctx.send(f"Persona for {command_array[2]}:")
+                                            for paragraph in persona.split("\n"):
+                                                await ctx.send(paragraph)
                                         case "new":
                                             self.persona_creation_state[ctx.author.id] = command_array[2]
                                             await ctx.send(f"Please describe {command_array[2]}.")
