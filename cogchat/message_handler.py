@@ -42,6 +42,8 @@ async def handle_message(cog, message):
             All responses you write must be from the point of view of
             {character['Name']}.
 
+            NEVER attempt to speak for another user, other than {character['Name']}.
+
             ### Transcript:
             {rendered_history}
             {character['Name']}:
