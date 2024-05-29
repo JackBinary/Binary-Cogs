@@ -1,4 +1,5 @@
 import base64
+from io import BytesIO
 import uuid
 import requests
 import discord
@@ -67,5 +68,6 @@ class ImageGen(commands.Cog):
         }
 
         response = requests.post(url='http://192.168.1.177:7860/sdapi/v1/txt2img', json=payload).json()
-        image = base64.b64decode(response['images'][0])
+        image = BytesIO(base64.b64decode(response['images'][0]))
+        image.seek(0)
         await ctx.send(file=discord.File(fp=image,filename=f"{uuid.uuid4().hex}.png"))
