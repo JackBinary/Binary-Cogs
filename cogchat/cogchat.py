@@ -1,10 +1,3 @@
-import os
-import json
-import textwrap
-import re
-import sseclient  # pip install sseclient-py
-import requests
-
 from redbot.core import commands
 from redbot.core.bot import Red
 from redbot.core.config import Config
@@ -27,7 +20,7 @@ class CogChat(commands.Cog):
             force_registration=True,
         )
         self.llm_server_url = "http://127.0.0.1:5000/v1/chat/completions"
-        self.config_dir = "config"
+        self.config_dir = ".cogchat"
         self.listening_channels = set()  # set to track which channels are being listened to
         self.persona_creation_state = {} # Temporary state to track persona creation
         
