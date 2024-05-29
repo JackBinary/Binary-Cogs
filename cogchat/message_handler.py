@@ -44,7 +44,8 @@ async def handle_message(cog, message):
             {rendered_history}
 
             Based on the transcript above, what should {character['Name']} say next?
-            Do not put quotes around dialogue, instead, describe actions within asterisks (eg. *waves*)
+            Do not put quotes around dialogue, instead, if there is an action, describe it with asterisks. (eg. *waves*)
+            Additionally, finish every sentence with a newline. (\\n)
             Do not begin your message with any form of {character['Name']}: or {character['Name']} says:
         """)
 
@@ -70,7 +71,7 @@ async def handle_message(cog, message):
         assistant_message = ''
         message_store = []
         # Regex pattern to match any number of punctuation marks (., !, ?, ...) or newline
-        pattern = r'([.!?]+|\n)'
+        pattern = r'(\n)'
 
         for event in client.events():
             payload = json.loads(event.data)
