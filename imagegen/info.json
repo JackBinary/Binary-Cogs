@@ -1,10 +1,10 @@
 {
     "$schema": "https://raw.githubusercontent.com/Cog-Creators/Red-DiscordBot/V3/develop/schema/red_cog.schema.json",
     "name": "ImageGen",
-    "short": "Generate Images in Discord",
-    "description": "Intermediatory for Discord bot and A1111",
-    "end_user_data_statement": "This cog does not store any user data.",
-    "install_msg": "Installed! Configure with [p]cogchat configure",
+    "short": "Generate Images in Discord!",
+    "description": "Intermediatory for Discord bot and A1111 compatible APIs",
+    "end_user_data_statement": "This cog stores no information about its users.",
+    "install_msg": "Installed!",
     "author": [
         "Spaghet"
     ],
