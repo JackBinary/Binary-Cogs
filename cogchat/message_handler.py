@@ -45,7 +45,7 @@ async def handle_message(cog, message):
 
             Based on the transcript above, what should {character['Name']} say next?
             Do not put quotes around dialogue, instead, if there is an action, describe it with asterisks. (eg. *waves*)
-            Additionally, finish every sentence with a newline. (\\n)
+            Additionally, finish every sentence with a newline. (\n)
             Do not begin your message with any form of {character['Name']}: or {character['Name']} says:
         """)
 
