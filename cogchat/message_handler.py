@@ -71,7 +71,7 @@ async def handle_message(cog, message):
         assistant_message = ''
         message_store = []
         # Regex pattern to match any number of punctuation marks (., !, ?, ...) or newline
-        pattern = r'(\n)'
+        pattern = r'(\n+)'
 
         for event in client.events():
             payload = json.loads(event.data)
