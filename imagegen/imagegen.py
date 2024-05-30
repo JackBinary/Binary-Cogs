@@ -86,8 +86,8 @@ class ImageGen(commands.Cog):
             positive_prompt = f"{self.default_positive}, {channel_config['positive']}, {', '.join(positive_prompt)}"
             negative_prompt = f"{self.default_negative}, {channel_config['negative']}, {', '.join(negative_prompt)}"
         except Exception:
-            positive_prompt = f"{self.default_positive}, {', '.join(positive_prompt)}"
-            negative_prompt = f"{self.default_negative}, {', '.join(negative_prompt)}"
+            positive_prompt = f"{self.default_positive}, <lora:Fizintine_Style:0.6> <lora:JdotKdot_PDXL-v1:0.7>, {', '.join(positive_prompt)}"
+            negative_prompt = f"{self.default_negative}, <lora:Fizintine_Style:0.6> <lora:JdotKdot_PDXL-v1:0.7>, {', '.join(negative_prompt)}"
 
         if ctx.message.attachments:
             attachment = BytesIO()
