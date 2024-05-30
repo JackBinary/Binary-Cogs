@@ -15,7 +15,7 @@ async def register_channel(cog, ctx):
     channel_config_path = os.path.join(guild_dir, f"{channel_id}.json")
     if not os.path.exists(channel_config_path):
         channel_config = {
-            "character": "Assistant",
+            "character": "Kitsuki",
             "temperature": None,
             "max_tokens": None,
             "chat_history": []
