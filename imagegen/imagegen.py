@@ -70,7 +70,7 @@ class ImageGen(commands.Cog):
             attachment = BytesIO()
             await ctx.message.attachments[0].save(attachment)
             attachment.seek(0)
-            init_image = base64.b64encode(attachment.getvalue())
+            init_image = base64.b64encode(attachment.getvalue()).decode("utf-8")
 
             payload = {
                 "prompt": self.default_loras + self.default_positive + " " + ", ".join(positive_prompt),
