@@ -108,7 +108,6 @@ class ImageGen(commands.Cog):
 
         async with ctx.typing():
             response = requests.post(url=f"http://192.168.1.177:7860/{endpoint}", json=payload).json()
-            print(response)
             image = BytesIO(base64.b64decode(response['images'][0]))
             image.seek(0)
         await ctx.send(file=discord.File(fp=image,filename=f"{uuid.uuid4().hex}.png"))
