@@ -60,53 +60,54 @@ async def handle_message(cog, message):
             data["temperature"] = channel_config["temperature"]
         
         # Send the request to the LLM server
-        stream_response = requests.post(
-            cog.llm_server_url,
-            headers={"Content-Type": "application/json"},
-            json=data,
-            verify=False,
-            stream=True
-        )
-        client = sseclient.SSEClient(stream_response)
-        assistant_message = ''
-        message_store = []
-        # Regex pattern to match any number of punctuation marks (., !, ?, ...) or newline
-        pattern = r'(\n+)'
+        async with message.channel.typing():
+            stream_response = requests.post(
+                cog.llm_server_url,
+                headers={"Content-Type": "application/json"},
+                json=data,
+                verify=False,
+                stream=True
+            )
+            client = sseclient.SSEClient(stream_response)
+            assistant_message = ''
+            message_store = []
+            # Regex pattern to match any number of punctuation marks (., !, ?, ...) or newline
+            pattern = r'(\n+)'
 
-        for event in client.events():
-            payload = json.loads(event.data)
-            print(payload)
-            chunk = payload['choices'][0]['delta']['content']
-            assistant_message += chunk
+            for event in client.events():
+                payload = json.loads(event.data)
+                print(payload)
+                chunk = payload['choices'][0]['delta']['content']
+                assistant_message += chunk
 
-            # Split the message using the regex pattern
-            parts = re.split(pattern, assistant_message)
+                # Split the message using the regex pattern
+                parts = re.split(pattern, assistant_message)
 
-            # Process each part
-            i = 0
-            while i < len(parts) - 1:
-                part = parts[i].strip()
-                if part:
-                    # Check if the next part is a punctuation mark or ellipsis
-                    if i + 1 < len(parts) and re.match(pattern, parts[i + 1]):
-                        part += parts[i + 1]
-                        i += 1  # Skip the punctuation mark in the next iteration
-                    part = part.replace(f"{character['Name']}:","")
+                # Process each part
+                i = 0
+                while i < len(parts) - 1:
+                    part = parts[i].strip()
                     if part:
-                        await message.channel.send(part)
-                        message_store.append(part)
-                i += 1
+                        # Check if the next part is a punctuation mark or ellipsis
+                        if i + 1 < len(parts) and re.match(pattern, parts[i + 1]):
+                            part += parts[i + 1]
+                            i += 1  # Skip the punctuation mark in the next iteration
+                        part = part.replace(f"{character['Name']}:","")
+                        if part:
+                            await message.channel.send(part)
+                            message_store.append(part)
+                    i += 1
 
-            # Keep the last part (which may be an incomplete message) in assistant_message
-            assistant_message = parts[-1].strip()
+                # Keep the last part (which may be an incomplete message) in assistant_message
+                assistant_message = parts[-1].strip()
 
-        # Send any remaining text that didn't end with a punctuation or newline
-        if assistant_message:
-            await message.channel.send(assistant_message)
-            message_store.append(assistant_message)
+            # Send any remaining text that didn't end with a punctuation or newline
+            if assistant_message:
+                await message.channel.send(assistant_message)
+                message_store.append(assistant_message)
 
-        assistant_message = "\n".join(message_store)
-        
-        channel_config['chat_history'].append(f"{channel_config['character']}: {assistant_message}")
-        with open(channel_config_path, 'w') as config_file:
-            json.dump(channel_config, config_file, indent=4)
+            assistant_message = "\n".join(message_store)
+            
+            channel_config['chat_history'].append(f"{channel_config['character']}: {assistant_message}")
+            with open(channel_config_path, 'w') as config_file:
+                json.dump(channel_config, config_file, indent=4)
