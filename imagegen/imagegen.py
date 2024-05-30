@@ -67,7 +67,8 @@ class ImageGen(commands.Cog):
             "batch_size": 1,
         }
 
-        response = requests.post(url='http://192.168.1.177:7860/sdapi/v1/txt2img', json=payload).json()
-        image = BytesIO(base64.b64decode(response['images'][0]))
-        image.seek(0)
+        async with ctx.typing():
+            response = requests.post(url='http://192.168.1.177:7860/sdapi/v1/txt2img', json=payload).json()
+            image = BytesIO(base64.b64decode(response['images'][0]))
+            image.seek(0)
         await ctx.send(file=discord.File(fp=image,filename=f"{uuid.uuid4().hex}.png"))
