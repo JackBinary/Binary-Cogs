@@ -12,7 +12,7 @@ from redbot.core.config import Config
 
 class ImageGen(commands.Cog):
     """
-    Chat with an LLM in Discord!
+    Generate images in Discord!
     """
 
     def __init__(self, bot: Red) -> None:
@@ -40,17 +40,24 @@ class ImageGen(commands.Cog):
         config_path = self.get_channel_config_path(channel_id)
         with open(config_path, "w") as file:
             json.dump(config, file, indent=4)
-    
+
+    async def generate_image(self, ctx, payload, endpoint):
+        async with ctx.typing():
+            response = requests.post(url=f"http://192.168.1.177:7860/{endpoint}", json=payload).json()
+            image = BytesIO(base64.b64decode(response['images'][0]))
+            image.seek(0)
+        return image
+
     @commands.command(name="draw")
     async def draw(self, ctx, *, text: str):
         """
-        Generate images in discord!
+        Generate images in Discord!
         """
         tokens = [token.strip() for token in text.split(",")]
         positive_prompt = []
         negative_prompt = []
         width, height = 832, 1248  # Default to portrait
-        seed = -1 # default to random
+        seed = -1  # default to random
         strength = 0.5
 
         for token in tokens:
@@ -82,13 +89,9 @@ class ImageGen(commands.Cog):
             else:
                 positive_prompt.append(token)
 
-        try:
-            channel_config = self.load_channel_config(ctx.channel.id)
-            positive_prompt = f"{self.default_positive}, {channel_config['positive']}, {', '.join(positive_prompt)}"
-            negative_prompt = f"{self.default_negative}, {channel_config['negative']}, {', '.join(negative_prompt)}"
-        except Exception:
-            positive_prompt = f"{self.default_positive}, <lora:Fizintine_Style:0.6> <lora:JdotKdot_PDXL-v1:0.7>, {', '.join(positive_prompt)}"
-            negative_prompt = f"{self.default_negative}, <lora:Fizintine_Style:0.6> <lora:JdotKdot_PDXL-v1:0.7>, {', '.join(negative_prompt)}"
+        channel_config = self.load_channel_config(ctx.channel.id)
+        positive_prompt = f"{self.default_positive}, {channel_config['positive']}, {', '.join(positive_prompt)}"
+        negative_prompt = f"{self.default_negative}, {channel_config['negative']}, {', '.join(negative_prompt)}"
 
         if ctx.message.attachments:
             attachment = BytesIO()
@@ -105,7 +108,7 @@ class ImageGen(commands.Cog):
                 "height": height,
                 "cfg_scale": 2,
                 "sampler_name": "DPM++ 2M SDE",
-                "scheduler" : "SGM Uniform",
+                "scheduler": "SGM Uniform",
                 "n_iter": 1,
                 "batch_size": 1,
                 "init_images": [init_image],
@@ -114,7 +117,6 @@ class ImageGen(commands.Cog):
             endpoint = 'sdapi/v1/img2img'
 
         else:
-        
             payload = {
                 "prompt": positive_prompt,
                 "negative_prompt": negative_prompt,
@@ -124,17 +126,16 @@ class ImageGen(commands.Cog):
                 "height": height,
                 "cfg_scale": 2,
                 "sampler_name": "DPM++ 2M SDE",
-                "scheduler" : "SGM Uniform",
+                "scheduler": "SGM Uniform",
                 "n_iter": 1,
                 "batch_size": 1,
             }
             endpoint = 'sdapi/v1/txt2img'
 
-        async with ctx.typing():
-            response = requests.post(url=f"http://192.168.1.177:7860/{endpoint}", json=payload).json()
-            image = BytesIO(base64.b64decode(response['images'][0]))
-            image.seek(0)
-        await ctx.send(file=discord.File(fp=image,filename=f"{uuid.uuid4().hex}.png"))
+        image = await self.generate_image(ctx, payload, endpoint)
+
+        view = ImageGenView(self, ctx, payload, endpoint)
+        await ctx.send(file=discord.File(fp=image, filename=f"{uuid.uuid4().hex}.png"), view=view)
 
     @commands.guild_only()
     @commands.admin_or_permissions(administrator=True)
@@ -154,3 +155,27 @@ class ImageGen(commands.Cog):
         channel_config[mode] = prompt
         self.save_channel_config(ctx.channel.id, channel_config)
         await ctx.send(f"{mode.capitalize()} prompt set to: {prompt}")
+
+
+class ImageGenView(discord.ui.View):
+    def __init__(self, cog, ctx, payload, endpoint):
+        super().__init__(timeout=None)
+        self.cog = cog
+        self.ctx = ctx
+        self.payload = payload
+        self.endpoint = endpoint
+
+    @discord.ui.button(label="Retry", style=discord.ButtonStyle.primary)
+    async def retry(self, button: discord.ui.Button, interaction: discord.Interaction):
+        image = await self.cog.generate_image(self.ctx, self.payload, self.endpoint)
+        await interaction.response.edit_message(file=discord.File(fp=image, filename=f"{uuid.uuid4().hex}.png"))
+
+    @discord.ui.button(label="Accept", style=discord.ButtonStyle.success)
+    async def accept(self, button: discord.ui.Button, interaction: discord.Interaction):
+        for item in self.children:
+            item.disabled = True
+        await interaction.response.edit_message(view=self)
+
+    @discord.ui.button(label="Delete", style=discord.ButtonStyle.danger)
+    async def delete(self, button: discord.ui.Button, interaction: discord.Interaction):
+        await interaction.message.delete()
