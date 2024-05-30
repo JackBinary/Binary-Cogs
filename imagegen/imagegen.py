@@ -67,7 +67,8 @@ class ImageGen(commands.Cog):
 
         if ctx.message.attachments:
             attachment = ctx.message.attachments[0]
-            init_image = base64.b64encode(await self.download_image(attachment.url).getvalue()).decode('utf-8')
+            async with self.bot.http._session.get(attachment.url) as response:
+                init_image = base64.b64encode(BytesIO(await response.read())).decode('utf-8')
             payload = {
                 "prompt": self.default_loras + self.default_positive + " " + ", ".join(positive_prompt),
                 "negative_prompt": self.default_negative + ", ".join(negative_prompt),
