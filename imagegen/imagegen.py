@@ -161,24 +161,79 @@ class ImageGen(commands.Cog):
 
 
 class ImageGenView(discord.ui.View):
-    def __init__(self, cog, ctx, payload, endpoint):
-        super().__init__(timeout=None)
+    LABEL_ACCEPT = "Accept"
+    LABEL_DELETE = "Delete"
+    LABEL_TRY_AGAIN = "Try Again"
+    LABEL_DRAWING = "Drawing.."
+
+    def __init__(self, cog, ctx, payload, endpoint, requesting_user_id, requesting_user_name):
+        super().__init__(timeout=120.0)
         self.cog = cog
         self.ctx = ctx
         self.payload = payload
         self.endpoint = endpoint
+        self.requesting_user_id = requesting_user_id
+        self.requesting_user_name = requesting_user_name
+        self.photo_accepted = False
+        self.image_message = None
 
-    @discord.ui.button(label="Retry", style=discord.ButtonStyle.primary)
-    async def retry(self, button: discord.ui.Button, interaction: discord.Interaction):
+        self.btn_try_again = discord.ui.Button(label=self.LABEL_TRY_AGAIN, style=discord.ButtonStyle.primary, row=1)
+        self.btn_try_again.callback = self.on_try_again
+        self.add_item(self.btn_try_again)
+
+        self.btn_accept = discord.ui.Button(label=self.LABEL_ACCEPT, style=discord.ButtonStyle.success, row=1)
+        self.btn_accept.callback = self.on_accept
+        self.add_item(self.btn_accept)
+
+        self.btn_delete = discord.ui.Button(label=self.LABEL_DELETE, style=discord.ButtonStyle.danger, row=1)
+        self.btn_delete.callback = self.on_delete
+        self.add_item(self.btn_delete)
+
+    def set_image_message(self, image_message: discord.Message):
+        self.image_message = image_message
+
+    def get_image_message(self) -> discord.Message:
+        if self.image_message is None:
+            raise ValueError("image_message is None")
+        return self.image_message
+
+    async def on_try_again(self, interaction: discord.Interaction):
+        if interaction.user.id != self.requesting_user_id:
+            await interaction.response.send_message("You are not authorized to use this button.", ephemeral=True)
+            return
+
+        self.btn_try_again.label = self.LABEL_DRAWING
+        self.btn_try_again.disabled = True
+        self.btn_accept.disabled = True
+        self.btn_delete.disabled = True
+
+        await interaction.response.edit_message(view=self)
         image = await self.cog.generate_image(self.ctx, self.payload, self.endpoint)
-        await interaction.response.edit_message(attachments=[discord.File(fp=image, filename=f"{uuid.uuid4().hex}.png")])
 
-    @discord.ui.button(label="Accept", style=discord.ButtonStyle.success)
-    async def accept(self, button: discord.ui.Button, interaction: discord.Interaction):
+        self.btn_try_again.label = self.LABEL_TRY_AGAIN
+        self.btn_try_again.disabled = False
+        self.btn_accept.disabled = False
+        self.btn_delete.disabled = False
+
+        await self.get_image_message().edit(attachments=[discord.File(fp=image, filename=f"{uuid.uuid4().hex}.png")], view=self)
+
+    async def on_accept(self, interaction: discord.Interaction):
+        if interaction.user.id != self.requesting_user_id:
+            await interaction.response.send_message("You are not authorized to use this button.", ephemeral=True)
+            return
+
+        self.photo_accepted = True
         for item in self.children:
             item.disabled = True
         await interaction.response.edit_message(view=self)
 
-    @discord.ui.button(label="Delete", style=discord.ButtonStyle.danger)
-    async def delete(self, button: discord.ui.Button, interaction: discord.Interaction):
+    async def on_delete(self, interaction: discord.Interaction):
+        if interaction.user.id != self.requesting_user_id:
+            await interaction.response.send_message("You are not authorized to use this button.", ephemeral=True)
+            return
+
         await interaction.message.delete()
+
+    async def on_timeout(self):
+        if not self.photo_accepted:
+            await self.get_image_message().delete()
