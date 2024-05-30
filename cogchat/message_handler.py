@@ -97,19 +97,19 @@ async def handle_message(cog, message):
                             i += 1  # Skip the punctuation mark in the next iteration
                         part = part.replace(f"{character['Name']}:","")
                         if part:
-                            await message.channel.send(part)
+                            await message.channel.send(part).strip()
                             message_store.append(part)
                     i += 1
 
                 # Keep the last part (which may be an incomplete message) in assistant_message
-                assistant_message = parts[-1].strip()
+                assistant_message = parts[-1].replace(f"{character['Name']}:","").strip()
 
             # Send any remaining text that didn't end with a punctuation or newline
             if assistant_message:
                 await message.channel.send(assistant_message)
                 message_store.append(assistant_message)
 
-            assistant_message = "\n".join(message_store)
+            assistant_message = "\n".join(message_store).replace(f"{character['Name']}:","").strip()
             
             channel_config['chat_history'].append(f"{channel_config['character']}: {assistant_message}")
             with open(channel_config_path, 'w') as config_file:
