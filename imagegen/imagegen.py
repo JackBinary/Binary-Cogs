@@ -223,7 +223,7 @@ class ImageGenView(discord.ui.View):
         self.photo_accepted = True
         for item in self.children:
             item.disabled = True
-        await interaction.response.edit_message(view=self)
+        await interaction.response.edit_message(view=None)
 
     async def on_delete(self, interaction: discord.Interaction):
         if interaction.user.id != self.requesting_user_id:
