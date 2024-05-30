@@ -1,5 +1,6 @@
 import base64
 from io import BytesIO
+import json
 import uuid
 import requests
 import discord
@@ -23,7 +24,21 @@ class ImageGen(commands.Cog):
         self.config_dir = ".imagegen"
         self.default_negative = "source_furry, source_pony, cartoon, 3d, realistic, monochrome, text, watermark, censored"
         self.default_positive = "score_9, score_8_up, score_7_up, score_6_up, source_anime"
-        self.default_loras = "<lora:Fizintine_Style:0.6> <lora:JdotKdot_PDXL-v1:0.7>"
+
+    def get_channel_config_path(self, channel_id):
+        return os.path.join(self.config_dir, f"{channel_id}.json")
+
+    def load_channel_config(self, channel_id):
+        config_path = self.get_channel_config_path(channel_id)
+        if os.path.exists(config_path):
+            with open(config_path, "r") as file:
+                return json.load(file)
+        return {"positive": "", "negative": ""}
+
+    def save_channel_config(self, channel_id, config):
+        config_path = self.get_channel_config_path(channel_id)
+        with open(config_path, "w") as file:
+            json.dump(config, file, indent=4)
     
     @commands.command(name="draw")
     async def draw(self, ctx, *, text: str):
@@ -66,6 +81,14 @@ class ImageGen(commands.Cog):
             else:
                 positive_prompt.append(token)
 
+        try:
+            channel_config = self.load_channel_config(ctx.channel.id)
+            positive_prompt = f"{self.default_positive}, {channel_config['positive']}, {', '.join(positive_prompt)}"
+            negative_prompt = f"{self.default_negative}, {channel_config['negative']}, {', '.join(negative_prompt)}"
+        except Exception:
+            positive_prompt = f"{self.default_positive}, {', '.join(positive_prompt)}"
+            negative_prompt = f"{self.default_negative}, {', '.join(negative_prompt)}"
+
         if ctx.message.attachments:
             attachment = BytesIO()
             await ctx.message.attachments[0].save(attachment)
@@ -73,8 +96,8 @@ class ImageGen(commands.Cog):
             init_image = base64.b64encode(attachment.getvalue()).decode("utf-8")
 
             payload = {
-                "prompt": self.default_loras + self.default_positive + " " + ", ".join(positive_prompt),
-                "negative_prompt": self.default_negative + ", ".join(negative_prompt),
+                "prompt": positive_prompt,
+                "negative_prompt": negative_prompt,
                 "seed": seed,
                 "steps": 8,
                 "width": width,
@@ -92,8 +115,8 @@ class ImageGen(commands.Cog):
         else:
         
             payload = {
-                "prompt": self.default_loras + self.default_positive + " " + ", ".join(positive_prompt),
-                "negative_prompt": self.default_negative + ", ".join(negative_prompt),
+                "prompt": positive_prompt,
+                "negative_prompt": negative_prompt,
                 "seed": seed,
                 "steps": 8,
                 "width": width,
@@ -111,3 +134,22 @@ class ImageGen(commands.Cog):
             image = BytesIO(base64.b64decode(response['images'][0]))
             image.seek(0)
         await ctx.send(file=discord.File(fp=image,filename=f"{uuid.uuid4().hex}.png"))
+
+    @commands.guild_only()
+    @commands.admin_or_permissions(administrator=True)
+    @commands.command(name="drawset")
+    async def drawset(self, ctx, mode: str, *, prompt: str):
+        """
+        Configure the channel positive and negative prompts.
+        Usage: [p]drawset positive <positive prompt>
+               [p]drawset negative <negative prompt>
+        """
+        mode = mode.lower()
+        if mode not in ["positive", "negative"]:
+            await ctx.send("Invalid mode! Use 'positive' or 'negative'.")
+            return
+
+        channel_config = self.load_channel_config(ctx.channel.id)
+        channel_config[mode] = prompt
+        self.save_channel_config(ctx.channel.id, channel_config)
+        await ctx.send(f"{mode.capitalize()} prompt set to: {prompt}")
