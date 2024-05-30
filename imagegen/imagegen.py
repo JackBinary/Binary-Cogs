@@ -34,6 +34,7 @@ class ImageGen(commands.Cog):
         negative_prompt = []
         width, height = 832, 1248  # Default to portrait
         seed = -1 # default to random
+        strength = 0.5
 
         for token in tokens:
             if "=" in token:
@@ -48,27 +49,61 @@ class ImageGen(commands.Cog):
                         width, height = 1248, 832
                 if key == "seed":
                     seed = int(value)
+                if key == "strength":
+                    if value == "1":
+                        strength = 0.2
+                    elif value == "2":
+                        strength = 0.4
+                    elif value == "3":
+                        strength = 0.5
+                    elif value == "4":
+                        strength = 0.6
+                    elif value == "5":
+                        strength = 0.7
             elif token.startswith("-"):
                 negative_prompt.append(token.lstrip("-").strip())
             else:
                 positive_prompt.append(token)
+
+        if ctx.message.attachments:
+            attachment = ctx.message.attachments[0]
+            init_image = base64.b64encode(await self.download_image(attachment.url).getvalue()).decode('utf-8')
+            payload = {
+                "prompt": self.default_loras + self.default_positive + " " + ", ".join(positive_prompt),
+                "negative_prompt": self.default_negative + ", ".join(negative_prompt),
+                "seed": seed,
+                "steps": 8,
+                "width": width,
+                "height": height,
+                "cfg_scale": 2,
+                "sampler_name": "DPM++ 2M SDE",
+                "scheduler" : "SGM Uniform",
+                "n_iter": 1,
+                "batch_size": 1,
+                "init_images": [init_image],
+                "denoising_strength": strength
+            }
+            endpoint = 'sdapi/v1/img2img'
+
+        else:
         
-        payload = {
-            "prompt": self.default_loras + self.default_positive + " " + ", ".join(positive_prompt),
-            "negative_prompt": self.default_negative + ", ".join(negative_prompt),
-            "seed": seed,
-            "steps": 8,
-            "width": width,
-            "height": height,
-            "cfg_scale": 2,
-            "sampler_name": "DPM++ 2M SDE",
-            "scheduler" : "SGM Uniform",
-            "n_iter": 1,
-            "batch_size": 1,
-        }
+            payload = {
+                "prompt": self.default_loras + self.default_positive + " " + ", ".join(positive_prompt),
+                "negative_prompt": self.default_negative + ", ".join(negative_prompt),
+                "seed": seed,
+                "steps": 8,
+                "width": width,
+                "height": height,
+                "cfg_scale": 2,
+                "sampler_name": "DPM++ 2M SDE",
+                "scheduler" : "SGM Uniform",
+                "n_iter": 1,
+                "batch_size": 1,
+            }
+            endpoint = 'sdapi/v1/txt2img'
 
         async with ctx.typing():
-            response = requests.post(url='http://192.168.1.177:7860/sdapi/v1/txt2img', json=payload).json()
+            response = requests.post(url=f"http://192.168.1.177:7860/{endpoint}", json=payload).json()
             image = BytesIO(base64.b64decode(response['images'][0]))
             image.seek(0)
         await ctx.send(file=discord.File(fp=image,filename=f"{uuid.uuid4().hex}.png"))
