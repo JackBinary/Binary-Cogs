@@ -9,6 +9,7 @@ from redbot.core import commands
 from redbot.core.bot import Red
 from redbot.core.config import Config
 
+
 class ImageGen(commands.Cog):
     """
     Generate images in Discord!
@@ -137,8 +138,9 @@ class ImageGen(commands.Cog):
 
         image = await self.generate_image(ctx, payload, endpoint)
 
-        view = ImageGenView(self, ctx, payload, endpoint)
-        await ctx.send(file=discord.File(fp=image, filename=f"{uuid.uuid4().hex}.png"), view=view)
+        view = ImageGenView(self, ctx, payload, endpoint, ctx.author.id, ctx.author.name)
+        message = await ctx.send(file=discord.File(fp=image, filename=f"{uuid.uuid4().hex}.png"), view=view)
+        view.set_image_message(message)
 
     @commands.guild_only()
     @commands.admin_or_permissions(administrator=True)
