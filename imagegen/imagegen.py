@@ -4,6 +4,7 @@ import json
 import uuid
 import requests
 import discord
+import os
 from redbot.core import commands
 from redbot.core.bot import Red
 from redbot.core.config import Config
