@@ -7,6 +7,7 @@ from redbot.core import commands
 from redbot.core.bot import Red
 from redbot.core.config import Config
 
+
 class ImageGen(commands.Cog):
     """
     Chat with an LLM in Discord!
@@ -66,9 +67,11 @@ class ImageGen(commands.Cog):
                 positive_prompt.append(token)
 
         if ctx.message.attachments:
-            attachment = ctx.message.attachments[0]
-            async with self.bot.http._session.get(attachment.url) as response:
-                init_image = base64.b64encode(BytesIO(await response.read())).decode('utf-8')
+            attachment = BytesIO()
+            ctx.message.attachments[0].save(attachment)
+            attachment.seek(0)
+            init_image = base64.b64encode(attachment.getvalue()).decode('utf-8')
+
             payload = {
                 "prompt": self.default_loras + self.default_positive + " " + ", ".join(positive_prompt),
                 "negative_prompt": self.default_negative + ", ".join(negative_prompt),
