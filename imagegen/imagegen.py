@@ -34,7 +34,7 @@ class ImageGen(commands.Cog):
         if os.path.exists(config_path):
             with open(config_path, "r") as file:
                 return json.load(file)
-        return {"positive": "", "negative": ""}
+        return {"positive": "<lora:Fizintine_Style:0.6> <lora:JdotKdot_PDXL-v1:0.7>", "negative": ""}
 
     def save_channel_config(self, channel_id, config):
         config_path = self.get_channel_config_path(channel_id)
@@ -89,13 +89,9 @@ class ImageGen(commands.Cog):
             else:
                 positive_prompt.append(token)
 
-        try:
-            channel_config = self.load_channel_config(ctx.channel.id)
-            positive_prompt = f"{self.default_positive}, {channel_config['positive']}, {', '.join(positive_prompt)}"
-            negative_prompt = f"{self.default_negative}, {channel_config['negative']}, {', '.join(negative_prompt)}"
-        except Exception:
-            positive_prompt = f"{self.default_positive}, <lora:Fizintine_Style:0.6> <lora:JdotKdot_PDXL-v1:0.7>, {', '.join(positive_prompt)}"
-            negative_prompt = f"{self.default_negative}, <lora:Fizintine_Style:0.6> <lora:JdotKdot_PDXL-v1:0.7>, {', '.join(negative_prompt)}"
+        channel_config = self.load_channel_config(ctx.channel.id)
+        positive_prompt = f"{self.default_positive}, {channel_config['positive']}, {', '.join(positive_prompt)}"
+        negative_prompt = f"{self.default_negative}, {channel_config['negative']}, {', '.join(negative_prompt)}"
 
         if ctx.message.attachments:
             attachment = BytesIO()
