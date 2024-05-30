@@ -9,7 +9,6 @@ from redbot.core import commands
 from redbot.core.bot import Red
 from redbot.core.config import Config
 
-
 class ImageGen(commands.Cog):
     """
     Generate images in Discord!
@@ -89,9 +88,13 @@ class ImageGen(commands.Cog):
             else:
                 positive_prompt.append(token)
 
-        channel_config = self.load_channel_config(ctx.channel.id)
-        positive_prompt = f"{self.default_positive}, {channel_config['positive']}, {', '.join(positive_prompt)}"
-        negative_prompt = f"{self.default_negative}, {channel_config['negative']}, {', '.join(negative_prompt)}"
+        try:
+            channel_config = self.load_channel_config(ctx.channel.id)
+            positive_prompt = f"{self.default_positive}, {channel_config['positive']}, {', '.join(positive_prompt)}"
+            negative_prompt = f"{self.default_negative}, {channel_config['negative']}, {', '.join(negative_prompt)}"
+        except Exception:
+            positive_prompt = f"{self.default_positive}, <lora:Fizintine_Style:0.6> <lora:JdotKdot_PDXL-v1:0.7>, {', '.join(positive_prompt)}"
+            negative_prompt = f"{self.default_negative}, <lora:Fizintine_Style:0.6> <lora:JdotKdot_PDXL-v1:0.7>, {', '.join(negative_prompt)}"
 
         if ctx.message.attachments:
             attachment = BytesIO()
@@ -168,7 +171,7 @@ class ImageGenView(discord.ui.View):
     @discord.ui.button(label="Retry", style=discord.ButtonStyle.primary)
     async def retry(self, button: discord.ui.Button, interaction: discord.Interaction):
         image = await self.cog.generate_image(self.ctx, self.payload, self.endpoint)
-        await interaction.response.edit_message(file=discord.File(fp=image, filename=f"{uuid.uuid4().hex}.png"))
+        await interaction.response.edit_message(attachments=[discord.File(fp=image, filename=f"{uuid.uuid4().hex}.png")])
 
     @discord.ui.button(label="Accept", style=discord.ButtonStyle.success)
     async def accept(self, button: discord.ui.Button, interaction: discord.Interaction):
