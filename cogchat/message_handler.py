@@ -97,7 +97,7 @@ async def handle_message(cog, message):
                             i += 1  # Skip the punctuation mark in the next iteration
                         part = part.replace(f"{character['Name']}:","").strip()
                         if part:
-                            await message.channel.send(part)
+                            await message.channel.send(part.replace(f"{character['Name']}:","").strip())
                             message_store.append(part)
                     i += 1
 
@@ -106,8 +106,8 @@ async def handle_message(cog, message):
 
             # Send any remaining text that didn't end with a punctuation or newline
             if assistant_message:
-                await message.channel.send(assistant_message)
-                message_store.append(assistant_message)
+                await message.channel.send(assistant_message.replace(f"{character['Name']}:","").strip())
+                message_store.append(assistant_message.replace(f"{character['Name']}:","").strip())
 
             assistant_message = "\n".join(message_store).replace(f"{character['Name']}:","").strip()
             
