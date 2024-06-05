@@ -183,7 +183,7 @@ class ImageGen(commands.Cog):
             return lora_pattern.sub(adjust_strength, prompt)
     
         # Construct the common positive and negative prompts with adjusted LoRA strengths
-        common_positive_prompt = adjust_lora_strength(f"{self.default_positive}, {channel_config['positive']}", num_splits)
+        common_positive_prompt = adjust_lora_strength(f"{self.default_positive}, {channel_config['positive']}", len(positive_prompt))
         common_negative_prompt = f"{self.default_negative}, {channel_config['negative']}"
     
         # Construct the full positive and negative prompts
