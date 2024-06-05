@@ -216,6 +216,7 @@ class ImageGen(commands.Cog):
             "n_iter": 1,
             "batch_size": 1,
         }
+        print(payload)
         endpoint = 'sdapi/v1/txt2img'
         image = await self.generate_image(ctx, payload, endpoint)
 
