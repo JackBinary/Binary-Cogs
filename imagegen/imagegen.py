@@ -166,15 +166,15 @@ class ImageGen(commands.Cog):
         positive_prompt = " BREAK ".join(
             filter(None, [
                 "<lora:Fizintine_Style:0.3> <lora:JdotKdot_PDXL-v1:0.35> score_9, score_8_up, score_7_up, score_6_up, source_anime",
-                ", ".join(positive_prompt[0]),
-                ", ".join(positive_prompt[1])
+                positive_prompt[0],
+                positive_prompt[1]
             ])
         )
         negative_prompt = " BREAK ".join(
             filter(None, [
                 "source_furry, source_pony, cartoon, 3d, realistic, monochrome, text, watermark, censored",
-                ", ".join(negative_prompt[0]),
-                ", ".join(negative_prompt[1])
+                negative_prompt[0],
+                negative_prompt[1]
             ])
         )
         
