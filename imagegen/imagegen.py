@@ -208,8 +208,8 @@ class ImageGen(commands.Cog):
                 }
             },
             "steps": 8,
-            "width": width,
-            "height": height,
+            "width": 1184,
+            "height": 880,
             "cfg_scale": 2,
             "sampler_name": "DPM++ 2M SDE",
             "scheduler": "SGM Uniform",
