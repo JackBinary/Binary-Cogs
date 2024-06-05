@@ -141,69 +141,91 @@ class ImageGen(commands.Cog):
     @commands.command(name="drawsplit")
     async def drawsplit(self, ctx, *, text: str):
         """
-        Generate images with different prompts for the left and right halves.
+        Generate images with different prompts for the split regions.
         """
         if ";" not in text:
-            await ctx.send("Invalid format! Use 'left_prompt; right_prompt'.")
+            await ctx.send("Invalid format! Use 'left_prompt; right_prompt; ...'.")
             return
+        
+        # Load the channel config
+        channel_config = self.load_channel_config(ctx.channel.id)
+        
+        # Split the input text by ";" and then split each part by ","
         tokens = [
-            [token.strip() for token in tokens.split(",")]
-            for tokens in text.split(";", 1)
+            [token.strip() for token in part.split(",")]
+            for part in text.split(";")
         ]
-
-        negative_prompt = [[],[]]
-        positive_prompt = [[],[]]
-
+    
+        # Initialize the positive and negative prompts lists
+        negative_prompt = [[] for _ in tokens]
+        positive_prompt = [[] for _ in tokens]
+    
+        # Process tokens to categorize them as positive or negative
         for i, side in enumerate(tokens):
             for token in side:
                 if token.startswith("-"):
                     negative_prompt[i].append(token.lstrip("-").strip())
                 else:
                     positive_prompt[i].append(token.strip())
-        negative_prompt = [", ".join(tokens) for tokens in negative_prompt]
-        positive_prompt = [", ".join(tokens) for tokens in positive_prompt]
-        
+                    
+        # Join tokens for each part into strings
+        negative_prompt = [", ".join(parts) for parts in negative_prompt]
+        positive_prompt = [", ".join(parts) for parts in positive_prompt]
+    
+        # Function to half the strength of LoRA tokens
+        def adjust_lora_strength(prompt):
+            lora_pattern = re.compile(r'<lora:(.*?):(.*?)>')
+            def half_strength(match):
+                lora_name = match.group(1)
+                strength = float(match.group(2)) / 2
+                return f'<lora:{lora_name}:{strength}>'
+            return lora_pattern.sub(half_strength, prompt)
+    
+        # Construct the common positive and negative prompts with adjusted LoRA strengths
+        common_positive_prompt = adjust_lora_strength(f"{self.default_positive}, {channel_config['positive']}")
+        common_negative_prompt = f"{self.default_negative}, {channel_config['negative']}"
+    
+        # Construct the full positive and negative prompts
         positive_prompt = " BREAK ".join(
             filter(None, [
-                "<lora:Fizintine_Style:0.3> <lora:JdotKdot_PDXL-v1:0.35> score_9, score_8_up, score_7_up, score_6_up, source_anime",
-                positive_prompt[0],
-                positive_prompt[1]
+                common_positive_prompt,
+                *positive_prompt
             ])
         )
         negative_prompt = " BREAK ".join(
             filter(None, [
-                "source_furry, source_pony, cartoon, 3d, realistic, monochrome, text, watermark, censored",
-                negative_prompt[0],
-                negative_prompt[1]
+                common_negative_prompt,
+                *negative_prompt
             ])
         )
-        
+    
+        # Construct the payload for the API request
         payload = {
             "prompt": positive_prompt,
             "negative_prompt": negative_prompt,
             "alwayson_scripts": {
                 "Regional Prompter": {
                     "args": [
-                        True,
-                        False,
-                        "Matrix",
-                        "Columns",
-                        "Mask",
-                        "Prompt",
-                        "1,1",
-                        "0.5",
-                        False,
-                        True,
-                        True,
-                        "Attention",
-                        False,
-                        "0",
-                        "0",
-                        "0",
-                        "",
-                        "0",
-                        "0",
-                        False
+                        True,                            # Enable
+                        False,                           # debug
+                        "Matrix",                        # Mode
+                        "Columns",                       # Split mode
+                        "Mask",                          # Mask mode
+                        "Prompt",                        # Prompt Mode
+                        ",".join(["1"] * len(tokens)),   # Ratios
+                        "0.5",                           # Base Ratios
+                        False,                           # Use Base
+                        True,                            # Use Common
+                        True,                            # Use Neg-Common 	
+                        "Attention",                     # Calcmode
+                        False,                           # Not Change AND
+                        "0",                             # LoRA Textencoder
+                        "0",                             # LoRA U-Net
+                        "0",                             # Threshold
+                        "",                              # Mask
+                        "0",                             # LoRA stop step 	
+                        "0",                             # LoRA Hires stop step 	
+                        False                            # flip
                     ]
                 }
             },
@@ -216,14 +238,13 @@ class ImageGen(commands.Cog):
             "n_iter": 1,
             "batch_size": 1,
         }
-        print(payload)
+    
         endpoint = 'sdapi/v1/txt2img'
         image = await self.generate_image(ctx, payload, endpoint)
-
+    
         view = ImageGenView(self, ctx, payload, endpoint, ctx.author.id, ctx.author.name)
         message = await ctx.send(file=discord.File(fp=image, filename=f"{uuid.uuid4().hex}.png"), view=view)
         view.set_image_message(message)
-    
 
     @commands.guild_only()
     @commands.admin_or_permissions(administrator=True)
