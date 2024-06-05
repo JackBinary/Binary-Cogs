@@ -187,19 +187,15 @@ class ImageGen(commands.Cog):
         common_negative_prompt = f"{self.default_negative}, {channel_config['negative']}"
     
         # Construct the full positive and negative prompts
-        positive_prompt = " BREAK ".join(
-            filter(None, [
-                common_positive_prompt,
-                *positive_prompt
-            ])
-        )
-        negative_prompt = " BREAK ".join(
-            filter(None, [
-                common_negative_prompt,
-                *negative_prompt
-            ])
-        )
-    
+        positive_prompt = " BREAK ".join([
+            common_positive_prompt,
+            *positive_prompt
+        ])
+        negative_prompt = " BREAK ".join([
+            common_negative_prompt,
+            *negative_prompt
+        ])
+        
         # Construct the payload for the API request
         payload = {
             "prompt": positive_prompt,
