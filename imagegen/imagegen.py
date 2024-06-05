@@ -174,16 +174,16 @@ class ImageGen(commands.Cog):
         positive_prompt = [", ".join(parts) for parts in positive_prompt]
     
         # Function to half the strength of LoRA tokens
-        def adjust_lora_strength(prompt):
+        def adjust_lora_strength(prompt, splits):
             lora_pattern = re.compile(r'<lora:(.*?):(.*?)>')
-            def half_strength(match):
+            def adjust_strength(match):
                 lora_name = match.group(1)
-                strength = float(match.group(2)) / 2
+                strength = float(match.group(2)) / splits
                 return f'<lora:{lora_name}:{strength}>'
-            return lora_pattern.sub(half_strength, prompt)
+            return lora_pattern.sub(adjust_strength, prompt)
     
         # Construct the common positive and negative prompts with adjusted LoRA strengths
-        common_positive_prompt = adjust_lora_strength(f"{self.default_positive}, {channel_config['positive']}")
+        common_positive_prompt = adjust_lora_strength(f"{self.default_positive}, {channel_config['positive']}", num_splits)
         common_negative_prompt = f"{self.default_negative}, {channel_config['negative']}"
     
         # Construct the full positive and negative prompts
