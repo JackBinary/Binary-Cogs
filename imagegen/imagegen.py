@@ -138,6 +138,92 @@ class ImageGen(commands.Cog):
         message = await ctx.send(file=discord.File(fp=image, filename=f"{uuid.uuid4().hex}.png"), view=view)
         view.set_image_message(message)
 
+    @commands.command(name="drawsplit")
+    async def drawsplit(self, ctx, *, text: str):
+        """
+        Generate images with different prompts for the left and right halves.
+        """
+        if ";" not in text:
+            await ctx.send("Invalid format! Use 'left_prompt; right_prompt'.")
+            return
+        tokens = [
+            [token.strip() for token in tokens.split(",")]
+            for tokens in text.split(";", 1)
+        ]
+
+        negative_prompt = [[],[]]
+        positive_prompt = [[],[]]
+
+        for i, side in enumerate(tokens):
+            for token in side:
+                if token.startswith("-"):
+                    negative_prompt[i].append(token.lstrip("-").strip())
+                else:
+                    positive_prompt[i].append(token.strip())
+        negative_prompt = [", ".join(tokens) for tokens in negative_prompt]
+        positive_prompt = [", ".join(tokens) for tokens in positive_prompt]
+        
+        positive_prompt = " BREAK ".join(
+            filter(None, [
+                "<lora:Fizintine_Style:0.3> <lora:JdotKdot_PDXL-v1:0.35> score_9, score_8_up, score_7_up, score_6_up, source_anime",
+                ", ".join(positive_prompt[0]),
+                ", ".join(positive_prompt[1])
+            ])
+        )
+        negative_prompt = " BREAK ".join(
+            filter(None, [
+                "source_furry, source_pony, cartoon, 3d, realistic, monochrome, text, watermark, censored",
+                ", ".join(negative_prompt[0]),
+                ", ".join(negative_prompt[1])
+            ])
+        )
+        
+        payload = {
+            "prompt": positive_prompt,
+            "negative_prompt": negative_prompt,
+            "alwayson_scripts": {
+                "Regional Prompter": {
+                    "args": [
+                        True,    # 0
+                        False,   # 1
+                        "Matrix",  # 2
+                        "Columns", # 3
+                        "Mask",    # 4
+                        "Prompt",  # 5
+                        "1,1",     # 6
+                        "0.5",     # 7
+                        False,     # 8
+                        True,      # 9
+                        True,      # 10
+                        "Attention", # 11
+                        [False],   # 12
+                        "0",       # 13
+                        "0",       # 14
+                        "0.4",     # 15
+                        None,      # 16
+                        "0",       # 17
+                        "0",       # 18
+                        False      # 19
+                    ]
+                }
+            },
+            "steps": 8,
+            "width": width,
+            "height": height,
+            "cfg_scale": 2,
+            "sampler_name": "DPM++ 2M SDE",
+            "scheduler": "SGM Uniform",
+            "n_iter": 1,
+            "batch_size": 1,
+        }
+        endpoint = 'sdapi/v1/txt2img'
+        image = await self.generate_image(ctx, payload, endpoint)
+
+        view = ImageGenView(self, ctx, payload, endpoint, ctx.author.id, ctx.author.name)
+        message = await ctx.send(file=discord.File(fp=image, filename=f"{uuid.uuid4().hex}.png"), view=view)
+        view.set_image_message(message)
+    
+
     @commands.guild_only()
     @commands.admin_or_permissions(administrator=True)
     @commands.command(name="drawset")
