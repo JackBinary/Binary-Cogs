@@ -184,6 +184,28 @@ class ImageGen(commands.Cog):
             "alwayson_scripts": {
                 "Regional Prompter": {
                     "args": [True,False,"Matrix","Columns","Mask","Prompt","1,1","0.5",False,True,True,"Attention",False,"0","0","0",""]
+                    "args": [
+                        True,
+                        False,
+                        "Matrix",
+                        "Columns",
+                        "Mask",
+                        "Prompt",
+                        "1,1",
+                        "0.5",
+                        False,
+                        True,
+                        True,
+                        "Attention",
+                        False,
+                        "0",
+                        "0",
+                        "0",
+                        "",
+                        "0",
+                        "0",
+                        False
+                    ]
                 }
             },
             "steps": 8,
