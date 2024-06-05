@@ -183,28 +183,7 @@ class ImageGen(commands.Cog):
             "negative_prompt": negative_prompt,
             "alwayson_scripts": {
                 "Regional Prompter": {
-                    "args": [
-                        True,    # 0
-                        False,   # 1
-                        "Matrix",  # 2
-                        "Columns", # 3
-                        "Mask",    # 4
-                        "Prompt",  # 5
-                        "1,1",     # 6
-                        "0.5",     # 7
-                        False,     # 8
-                        True,      # 9
-                        True,      # 10
-                        "Attention", # 11
-                        [False],   # 12
-                        "0",       # 13
-                        "0",       # 14
-                        "0.4",     # 15
-                        None,      # 16
-                        "0",       # 17
-                        "0",       # 18
-                        False      # 19
-                    ]
+                    "args": [True,False,"Matrix","Columns","Mask","Prompt","1,1","0.5",False,True,True,"Attention",False,"0","0","0",""]
                 }
             },
             "steps": 8,
