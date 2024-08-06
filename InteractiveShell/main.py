@@ -72,7 +72,7 @@ class InteractiveShell(commands.Cog):
             client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             client.connect(ip, username=username, password=password)
             self.ssh_clients[ctx.author.id] = client
-            await ctx.send(f"Connected to {ip} as {username}. Type 'exit' to end the session.")
+            await ctx.send(f"Connected to {ip} as {username}. Type 'exit' or use the command '[p]end_ssh' to end the session.")
         except Exception as e:
             await ctx.send(f"Failed to connect: {e}")
             return
@@ -130,6 +130,19 @@ class InteractiveShell(commands.Cog):
         proc.terminate()
         await ctx.send("Ending shell session.")
         del self.sessions[ctx.author.id]
+
+    @commands.command()
+    @commands.is_owner()
+    async def end_ssh(self, ctx):
+        """End the interactive SSH session."""
+        if ctx.author.id not in self.ssh_clients:
+            await ctx.send("You do not have an active SSH session.")
+            return
+
+        client = self.ssh_clients[ctx.author.id]
+        client.close()
+        await ctx.send("Ending SSH session.")
+        del self.ssh_clients[ctx.author.id]
 
 def setup(bot):
     bot.add_cog(InteractiveShell(bot))
