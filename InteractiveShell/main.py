@@ -4,6 +4,7 @@ import discord
 from redbot.core import commands
 from redbot.core.bot import Red
 from datetime import datetime
+import paramiko
 
 class InteractiveShell(commands.Cog):
     """A cog for an interactive shell session."""
@@ -11,18 +12,19 @@ class InteractiveShell(commands.Cog):
     def __init__(self, bot: Red):
         self.bot = bot
         self.sessions = {}
+        self.ssh_clients = {}
         self.log_file = "shell_session_log.txt"
 
-    def log_attempt(self, user):
-        """Log an attempt to start a shell session."""
+    def log_attempt(self, user, session_type):
+        """Log an attempt to start a shell or SSH session."""
         with open(self.log_file, "a") as f:
-            f.write(f"{datetime.utcnow().isoformat()} - {user} (ID: {user.id}) attempted to start a shell session.\n")
+            f.write(f"{datetime.utcnow().isoformat()} - {user} (ID: {user.id}) attempted to start a {session_type} session.\n")
 
     @commands.command()
     @commands.is_owner()
     async def start_shell(self, ctx):
         """Start an interactive shell session."""
-        self.log_attempt(ctx.author)
+        self.log_attempt(ctx.author, "shell")
         
         if ctx.author.id in self.sessions:
             await ctx.send("You already have an active shell session.")
@@ -51,6 +53,51 @@ class InteractiveShell(commands.Cog):
                     await ctx.send("Shell session has ended.")
                     del self.sessions[ctx.author.id]
                     break
+            except Exception as e:
+                await ctx.send(f"An error occurred: {e}")
+                break
+
+    @commands.command()
+    @commands.is_owner()
+    async def start_ssh(self, ctx, ip: str, username: str, password: str):
+        """Start an SSH session."""
+        self.log_attempt(ctx.author, "SSH")
+
+        if ctx.author.id in self.ssh_clients:
+            await ctx.send("You already have an active SSH session.")
+            return
+
+        try:
+            client = paramiko.SSHClient()
+            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            client.connect(ip, username=username, password=password)
+            self.ssh_clients[ctx.author.id] = client
+            await ctx.send(f"Connected to {ip} as {username}. Type 'exit' to end the session.")
+        except Exception as e:
+            await ctx.send(f"Failed to connect: {e}")
+            return
+
+        while True:
+            def check(m):
+                return m.author == ctx.author and m.channel == ctx.channel
+
+            try:
+                message = await self.bot.wait_for("message", check=check)
+                if message.content.strip().lower() == 'exit':
+                    client.close()
+                    await ctx.send("Ending SSH session.")
+                    del self.ssh_clients[ctx.author.id]
+                    break
+
+                stdin, stdout, stderr = client.exec_command(message.content)
+                output = stdout.read().decode() + stderr.read().decode()
+                if len(output) > 2000:
+                    await ctx.send("Output too long to display, sending as a file.")
+                    with open("ssh_output.txt", "w") as f:
+                        f.write(output)
+                    await ctx.send(file=discord.File("ssh_output.txt"))
+                else:
+                    await ctx.send(f"```\n{output}\n```")
             except Exception as e:
                 await ctx.send(f"An error occurred: {e}")
                 break
