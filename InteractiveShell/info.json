@@ -1,0 +1,10 @@
+{
+    "author": ["Spaghet"],
+    "description": "A cog for an interactive shell session through Discord.",
+    "install_msg": "Thank you for installing the Interactive Shell Cog. Use `[p]start_shell` to begin a session.",
+    "end_user_data_statement": "This cog logs Shell usage for security.",
+    "min_bot_version": "3.4.0",
+    "required_cogs": {},
+    "requirements": [],
+    "tags": ["utility", "shell"]
+}
