@@ -107,25 +107,28 @@ class ImageGen(commands.Cog):
         print("Payload created")
         print(payload)
 
-        # Start both image generation and live preview fetching concurrently
+        # Start image generation asynchronously
         async with ctx.typing():
             print("Typing started")
             message = await ctx.reply("Generating image...", mention_author=True)
             print("Message sent: Generating image...")
 
-            # Start image generation and live preview loop concurrently
-            generate_image_task = asyncio.create_task(self.generate_image(ctx, payload, 'sdapi/v1/txt2img'))
+            # Start the live preview loop after a small delay to give time for generation to start
+            await asyncio.sleep(1)  # Small delay before live preview starts
+
+            # Start fetching live previews while the image is being generated
             live_preview_task = asyncio.create_task(self.live_preview_loop(ctx, message, task_id))
 
-            # Wait for image generation to complete
-            print("Waiting for image generation to complete")
-            final_image = await generate_image_task
-            await live_preview_task  # Ensure live preview task also completes
+            # Generate image in background
+            final_image = await self.generate_image(ctx, payload, 'sdapi/v1/txt2img')
 
             if final_image is None:
                 print("Image generation failed")
                 await ctx.reply("Failed to generate the image. Please check the API and try again.", mention_author=True)
                 return
+
+            # Ensure live preview task completes (if it's still running)
+            await live_preview_task
 
             print("Sending final image")
             await message.edit(content=None, attachments=[File(fp=final_image, filename=f"{task_id}.png")])
