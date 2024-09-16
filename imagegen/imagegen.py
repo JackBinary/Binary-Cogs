@@ -83,6 +83,18 @@ class ImageGen(commands.Cog):
         self.generator = ImageGenerator(self.api_url)
 
     @commands.command()
+    async def setapiurl(self, ctx, url: str):
+        """Sets the API URL for the Stable Diffusion WebUI."""
+        await self.config.api_url.set(url)
+        await ctx.reply(f"API URL has been set to: {url}", mention_author=True)
+
+    @commands.command()
+    async def getapiurl(self, ctx):
+        """Gets the current API URL."""
+        api_url = await self.config.api_url()
+        await ctx.reply(f"The current API URL is: {api_url}", mention_author=True)
+
+    @commands.command()
     async def draw(self, ctx, *, text: str):
         """
         Generate images and provide live preview.
