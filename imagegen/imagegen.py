@@ -71,6 +71,11 @@ class ImageGenerator:
                         pass
             sleep(1)
 
+    def remove_task(self, task_id):
+        """Remove the task from the images dictionary after final image is sent."""
+        if task_id in self.images:
+            del self.images[task_id]
+
 class ImageGen(commands.Cog):
     """Cog for generating images using Stable Diffusion WebUI API with ImageGenerator."""
 
@@ -166,7 +171,6 @@ class ImageGen(commands.Cog):
         message = await ctx.reply(f"Generating...", mention_author=True)
 
        # Wait for the image generation result and fetch it
-        image = None
         async with ctx.typing():
             base64_image = None  # to track the last image's base64 string
             while True:
@@ -187,4 +191,11 @@ class ImageGen(commands.Cog):
                         break
     
                 await asyncio.sleep(1)  # Poll every second
-        await message.edit(content="Done!")
+            result = self.image_generator.callback(task_id)
+            base64_image = current_image_base64
+            # Decode the base64 string only when sending the image
+            image_data = base64.b64decode(base64_image)
+            image = BytesIO(image_data)
+            image.seek(0)
+        await message.edit(content="Done!",attachments=[File(fp=image, filename=f"{task_id}.png")])
+        self.image_generator.remove_task(task_id)
