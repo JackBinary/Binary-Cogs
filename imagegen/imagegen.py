@@ -39,7 +39,6 @@ class ImageGenerator:
             if len(self.tasks) >= 1:
                 task = self.tasks.pop(0)
                 task_id = task["id"]
-                print("New Task!",task_id)
                 payload = task["payload"]
                 self.in_progress.append(task_id)
 
@@ -56,7 +55,6 @@ class ImageGenerator:
     def get_progress(self):
         while True:
             for task_id in self.in_progress:
-                print("Updating",task_id)
                 payload = {
                     "id_task": task_id,
                     "id_live_preview": -1,
@@ -65,7 +63,6 @@ class ImageGenerator:
                 response = requests.post(f"{self.api_url}/{self.progress}", json=payload, timeout=60)
                 response.raise_for_status()
                 response_json = response.json()
-                print(response_json)
                 if 'live_preview' in response_json:
                     try:
                         image_base64 = response_json['live_preview'].split(",")[1]
