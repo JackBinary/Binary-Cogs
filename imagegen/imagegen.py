@@ -5,14 +5,14 @@ import requests
 from queue import Queue
 import time
 import uuid
-from redbot.core import commands
+from redbot.core import commands, Config
 from discord import File
 
 class ImageGenerator:
     """Image Generator Object that handles image generation in a separate thread."""
-    
-    def __init__(self, api_url):
-        self.api_url = api_url
+
+    def __init__(self, config):
+        self.config = config
         self.task_queue = Queue()
         self.results = {}
         self.lock = threading.Lock()  # For thread-safe access to results
@@ -25,24 +25,24 @@ class ImageGenerator:
         """Background worker that processes image generation tasks."""
         while self.running:
             try:
-                task_id, payload = self.task_queue.get(timeout=1)
-                self._generate_image(task_id, payload)
+                task_id, payload, api_url = self.task_queue.get(timeout=1)
+                self._generate_image(task_id, payload, api_url)
             except:
                 pass
 
-    def post_task(self, payload):
+    def post_task(self, payload, api_url):
         """Posts a new image generation task and returns a unique task_id."""
         task_id = uuid.uuid4().hex
-        self.task_queue.put((task_id, payload))
+        self.task_queue.put((task_id, payload, api_url))
         return task_id
 
-    def _generate_image(self, task_id, payload):
+    def _generate_image(self, task_id, payload, api_url):
         """Internal method to generate images."""
         try:
-            response = requests.post(f"{self.api_url}/sdapi/v1/txt2img", json=payload, timeout=30)
+            response = requests.post(f"{api_url}/sdapi/v1/txt2img", json=payload, timeout=30)
             response.raise_for_status()
             response_json = response.json()
-            
+
             if 'images' in response_json and response_json['images']:
                 image_data = base64.b64decode(response_json['images'][0])
                 image = BytesIO(image_data)
@@ -74,13 +74,15 @@ class ImageGenerator:
         self.worker_thread.join()
 
 
-class ImageGen(commands.Cog):
+class ImageGenCog(commands.Cog):
     """Cog for generating images using ImageGenerator in a separate thread."""
-    
+
     def __init__(self, bot):
         self.bot = bot
-        self.api_url = "http://127.0.0.1:7860"  # Replace with dynamic config if needed
-        self.generator = ImageGenerator(self.api_url)
+        self.config = Config.get_conf(self, identifier=1234567890, force_registration=True)
+        default_global = {"api_url": "http://127.0.0.1:7860"}
+        self.config.register_global(**default_global)
+        self.generator = ImageGenerator(self.config)
 
     @commands.command()
     async def setapiurl(self, ctx, url: str):
@@ -145,8 +147,11 @@ class ImageGen(commands.Cog):
             "sampler_name": "Euler a",
         }
 
+        # Retrieve dynamic API URL from config
+        api_url = await self.config.api_url()
+
         # Post the task and get the task_id
-        task_id = self.generator.post_task(payload)
+        task_id = self.generator.post_task(payload, api_url)
 
         await ctx.reply(f"Image generation started with Task ID: {task_id}")
 
