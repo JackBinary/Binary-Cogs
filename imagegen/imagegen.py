@@ -4,11 +4,11 @@ import requests
 import threading
 from time import sleep
 from io import BytesIO
+from PIL import Image
 from discord import File
 from redbot.core import commands
 from redbot.core.config import Config
 import asyncio
-from PIL import Image
 
 class ImageGenerator:
     def __init__(self):
@@ -206,4 +206,14 @@ class ImageGen(commands.Cog):
 
             # Final cleanup after the image is complete
             self.image_generator.remove_task(task_id)
-        await message.edit(content="Done!")
+            
+            # Final message with the completed image (resized)
+            image_data = base64.b64decode(base64_image)
+            image = BytesIO(image_data)
+            image.seek(0)
+            with Image.open(image) as img:
+                img = img.resize((final_width, final_height), Image.ANTIALIAS)
+                buffer = BytesIO()
+                img.save(buffer, format="PNG")
+                buffer.seek(0)
+        await message.edit(content="Done!", attachments=[File(fp=buffer, filename=f"{task_id}.png")])
