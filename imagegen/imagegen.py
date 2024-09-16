@@ -1,48 +1,97 @@
 import threading
 import base64
-import uuid
 from io import BytesIO
 import requests
-from discord import File
-from redbot.core import commands
-from redbot.core.config import Config
+from queue import Queue
 import time
-import asyncio
+import uuid
+from redbot.core import commands
+from discord import File
 
-class ImageGen(commands.Cog):
-    """Cog for generating images using Stable Diffusion WebUI API with threading"""
+class ImageGenerator:
+    """Image Generator Object that handles image generation in a separate thread."""
+    
+    def __init__(self, api_url):
+        self.api_url = api_url
+        self.task_queue = Queue()
+        self.results = {}
+        self.lock = threading.Lock()  # For thread-safe access to results
+        self.running = True
+        # Start the background thread
+        self.worker_thread = threading.Thread(target=self._worker, daemon=True)
+        self.worker_thread.start()
 
+    def _worker(self):
+        """Background worker that processes image generation tasks."""
+        while self.running:
+            try:
+                task_id, payload = self.task_queue.get(timeout=1)
+                self._generate_image(task_id, payload)
+            except:
+                pass
+
+    def post_task(self, payload):
+        """Posts a new image generation task and returns a unique task_id."""
+        task_id = uuid.uuid4().hex
+        self.task_queue.put((task_id, payload))
+        return task_id
+
+    def _generate_image(self, task_id, payload):
+        """Internal method to generate images."""
+        try:
+            response = requests.post(f"{self.api_url}/sdapi/v1/txt2img", json=payload, timeout=30)
+            response.raise_for_status()
+            response_json = response.json()
+            
+            if 'images' in response_json and response_json['images']:
+                image_data = base64.b64decode(response_json['images'][0])
+                image = BytesIO(image_data)
+                image.seek(0)
+
+                with self.lock:
+                    # Save the final image in results
+                    self.results[task_id] = {
+                        "is_final": True,
+                        "image": image
+                    }
+
+        except Exception as e:
+            # Handle error and return
+            with self.lock:
+                self.results[task_id] = {"error": str(e)}
+
+    def get_result(self, task_id):
+        """Fetch the result (preview or final) for a given task_id."""
+        with self.lock:
+            result = self.results.get(task_id, None)
+            if result:
+                return result
+            return {"is_final": False, "image": None}
+
+    def stop(self):
+        """Gracefully stop the image generator."""
+        self.running = False
+        self.worker_thread.join()
+
+
+class ImageGenCog(commands.Cog):
+    """Cog for generating images using ImageGenerator in a separate thread."""
+    
     def __init__(self, bot):
         self.bot = bot
-        # Initialize Config with default settings
-        self.config = Config.get_conf(self, identifier=1234567890, force_registration=True)
-        default_global = {"api_url": "http://127.0.0.1:7860"}
-        self.config.register_global(**default_global)
+        self.api_url = "http://127.0.0.1:7860"  # Replace with dynamic config if needed
+        self.generator = ImageGenerator(self.api_url)
 
     @commands.command()
-    async def setapiurl(self, ctx, url: str):
-        """Sets the API URL for the Stable Diffusion WebUI."""
-        await self.config.api_url.set(url)
-        await ctx.reply(f"API URL has been set to: {url}", mention_author=True)
-
-    @commands.command()
-    async def getapiurl(self, ctx):
-        """Gets the current API URL."""
-        api_url = await self.config.api_url()
-        await ctx.reply(f"The current API URL is: {api_url}", mention_author=True)
-
-    @commands.command(name="draw")
     async def draw(self, ctx, *, text: str):
         """
-        Generate images in Discord with txt2img followed by img2img for upscaling!
+        Generate images and provide live preview.
         """
-        task_id = uuid.uuid4().hex
         tokens = [token.strip() for token in text.split(",")]
         positive_prompt = []
         negative_prompt = []
-        # Default to portrait (both initial and upscaled resolutions)
+        # Default to portrait resolution
         width, height = 832, 1216
-        upscale_width, upscale_height = 1080, 1576
         seed = -1  # default to random
         strength = 0.5
 
@@ -53,11 +102,11 @@ class ImageGen(commands.Cog):
                 key, value = key.strip(), value.strip()
                 if key == "aspect":
                     if value == "portrait":
-                        width, height, upscale_width, upscale_height = 832, 1216, 1080, 1576
+                        width, height = 832, 1216
                     elif value == "square":
-                        width, height, upscale_width, upscale_height = 1024, 1024, 1328, 1328
+                        width, height = 1024, 1024
                     elif value == "landscape":
-                        width, height, upscale_width, upscale_height = 1216, 832, 1576, 1080
+                        width, height = 1216, 832
                 if key == "seed":
                     seed = int(value)
                 if key == "strength":
@@ -73,104 +122,48 @@ class ImageGen(commands.Cog):
         # High-Resolution settings for the first Image (txt2img)
         payload = {
             "enable_hr": True,
-            "hr_cfg": 2.5,
             "denoising_strength": 0.7,
-            "hr_scale": 1.3,
-            "hr_second_pass_steps": 8,
-            "hr_upscaler": "Latent",
             "prompt": positive_prompt,
-            "hr_prompt": positive_prompt,
             "negative_prompt": negative_prompt,
-            "hr_negative_prompt": negative_prompt,
             "seed": seed,
             "steps": 8,
             "width": width,
             "height": height,
             "cfg_scale": 2.5,
             "sampler_name": "Euler a",
-            "scheduler": "SGM Uniform",
-            "batch_size": 1,
-            "n_iter": 1,
-            "force_task_id": task_id
         }
 
-        # Inform user the image is being generated
-        await ctx.reply("Generating image...", mention_author=True)
+        # Post the task and get the task_id
+        task_id = self.generator.post_task(payload)
 
-        # Start threads for both image generation and live preview
-        image_thread = threading.Thread(target=self.generate_image, args=(ctx, payload, task_id))
-        preview_thread = threading.Thread(target=self.fetch_live_preview, args=(ctx, task_id))
-        image_thread.start()
-        preview_thread.start()
+        await ctx.reply(f"Image generation started with Task ID: {task_id}")
 
-    def generate_image(self, ctx, payload, task_id):
-        try:
-            # Get the API URL from the config
-            api_url = "http://127.0.0.1:7860"  # Replace this with your config logic
-            response = requests.post(f"{api_url}/sdapi/v1/txt2img", json=payload, timeout=30)
-            response.raise_for_status()
+        # Start monitoring the result
+        threading.Thread(target=self._monitor_task, args=(ctx, task_id), daemon=True).start()
 
-            # Handle the response
-            response_json = response.json()
-            if 'images' not in response_json or not response_json['images']:
-                asyncio.run_coroutine_threadsafe(self.send_error(ctx, "No images found in the API response."), self.bot.loop)
-                return
+    def _monitor_task(self, ctx, task_id):
+        """Monitor the image generation task and send the image when ready."""
+        while True:
+            result = self.generator.get_result(task_id)
 
-            # Convert the base64 image to BytesIO
-            image_data = base64.b64decode(response_json['images'][0])
-            image = BytesIO(image_data)
-            image.seek(0)
+            if result.get("error"):
+                # Send the error if any occurred
+                asyncio.run_coroutine_threadsafe(
+                    ctx.reply(f"Error: {result['error']}"), self.bot.loop
+                )
+                break
 
-            # Send the image back to Discord (switch to the event loop)
-            asyncio.run_coroutine_threadsafe(self.send_final_image(ctx, image, task_id), self.bot.loop)
+            if result["image"]:
+                # Send the final image
+                image = result["image"]
+                asyncio.run_coroutine_threadsafe(
+                    ctx.reply(file=File(fp=image, filename=f"{task_id}.png")), self.bot.loop
+                )
+                break
 
-        except requests.exceptions.Timeout:
-            asyncio.run_coroutine_threadsafe(self.send_error(ctx, "The request to the API timed out."), self.bot.loop)
+            time.sleep(1)  # Check every second for a result
 
-        except Exception as e:
-            asyncio.run_coroutine_threadsafe(self.send_error(ctx, f"An error occurred while generating the image: {str(e)}"), self.bot.loop)
+    def cog_unload(self):
+        """Ensure the generator thread is stopped when the cog is unloaded."""
+        self.generator.stop()
 
-    def fetch_live_preview(self, ctx, task_id):
-        """Fetch live preview while the image is being generated"""
-        try:
-            api_url = "http://127.0.0.1:7860"  # Replace with your config logic
-            live_preview_url = f"{api_url}/internal/progress"
-            while True:
-                progress_payload = {
-                    "id_task": task_id,
-                    "id_live_preview": -1,
-                    "live_preview": True
-                }
-                # Request progress data
-                response = requests.post(live_preview_url, json=progress_payload, timeout=10)
-                response.raise_for_status()
-                progress_data = response.json()
-
-                # If completed, exit the loop
-                if progress_data.get("completed"):
-                    break
-
-                # Process the live preview and send it as a Discord message
-                if progress_data.get("live_preview"):
-                    preview_image_data = progress_data['live_preview'].split(",")[1]
-                    preview_image = BytesIO(base64.b64decode(preview_image_data))
-                    preview_image.seek(0)
-                    asyncio.run_coroutine_threadsafe(
-                        self.send_live_preview(ctx, preview_image, task_id), self.bot.loop
-                    )
-                time.sleep(1)  # Sleep for 1 second before the next preview fetch
-
-        except Exception as e:
-            asyncio.run_coroutine_threadsafe(self.send_error(ctx, f"Error fetching live preview: {str(e)}"), self.bot.loop)
-
-    async def send_live_preview(self, ctx, preview_image, task_id):
-        """Helper function to send the live preview image to Discord."""
-        await ctx.reply(file=File(fp=preview_image, filename=f"{task_id}_preview.png"), mention_author=True)
-
-    async def send_final_image(self, ctx, image, task_id):
-        """Helper function to send the final image back to Discord."""
-        await ctx.reply(file=File(fp=image, filename=f"{task_id}.png"), mention_author=True)
-
-    async def send_error(self, ctx, error_message):
-        """Helper function to send an error message back to Discord."""
-        await ctx.reply(error_message, mention_author=True)
