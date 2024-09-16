@@ -8,6 +8,7 @@ from discord import File
 from redbot.core import commands
 from redbot.core.config import Config
 import asyncio
+from PIL import Image
 
 class ImageGenerator:
     def __init__(self):
