@@ -47,6 +47,7 @@ class ImageGenerator:
                 response = requests.post(f"{self.api_url}/{self.txt2img}", json=payload, timeout=60)
                 response.raise_for_status()
                 response_json = response.json()
+                print(response_json)
                 if 'images' in response_json:
                     self.in_progress.remove(task_id)
                     image_base64 = response_json['images'][0]
