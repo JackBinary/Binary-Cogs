@@ -7,6 +7,7 @@ from discord import File
 from redbot.core import commands
 from redbot.core.config import Config
 import time
+import asyncio
 
 class ImageGen(commands.Cog):
     """Cog for generating images using Stable Diffusion WebUI API with threading"""
