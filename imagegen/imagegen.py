@@ -70,8 +70,16 @@ class ImageGen(commands.Cog):
 
         # First Image (txt2img)
         payload = {
+            "enable_hr" : true,
+            "hr_cfg" : 2.5,
+            "denoising_strength" : 0.7,
+            "hr_scale" : 1.3,
+            "hr_second_pass_steps" : 8,
+            "hr_upscaler" : "Latent",
             "prompt": positive_prompt,
+            "hr_prompt": positive_prompt,
             "negative_prompt": negative_prompt,
+            "hr_negative_prompt": negative_prompt,
             "seed": seed,
             "steps": 8,
             "width": width,
@@ -82,7 +90,6 @@ class ImageGen(commands.Cog):
             "batch_size": 1,
             "n_iter": 1
         }
-
 
         # Generate initial txt2img image
         message = await ctx.reply(f"...", mention_author=True)
@@ -95,36 +102,6 @@ class ImageGen(commands.Cog):
 
         # Attach the first image to the original reply
         await message.edit(attachments=[File(fp=image, filename=f"{uuid.uuid4().hex}.png")])
-
-        # Upscaling Image
-        image.seek(0)  # Ensure the pointer is at the start of the file
-        init_image_base64 = base64.b64encode(image.getvalue()).decode('utf-8')
-
-        # Prepare img2img payload
-        img2img_payload = {
-            "prompt": positive_prompt,
-            "negative_prompt": negative_prompt,
-            "seed": seed,
-            "steps": 8,
-            "width": upscale_width,
-            "height": upscale_height,
-            "cfg_scale": 2.5,
-            "sampler_index": "Euler a",
-            "scheduler": "SGM Uniform",
-            "init_images": [init_image_base64],
-            "denoising_strength": strength
-        }
-
-        # Generate the upscaled image
-        final_image = await self.generate_image(ctx, img2img_payload, 'sdapi/v1/img2img')
-
-        # Check if the upscaled image is None
-        if final_image is None:
-            await message.edit(f"Something went wrong!")
-            return
-
-        # Replace the previous image with the upscaled one
-        await message.edit(attachments=[File(fp=final_image, filename=f"{uuid.uuid4().hex}.png")])
 
     async def generate_image(self, ctx, payload, endpoint):
         """Helper function to send payload to the Stable Diffusion API and return the generated image."""
