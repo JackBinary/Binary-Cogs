@@ -119,6 +119,11 @@ class ImageGen(commands.Cog):
             response = requests.post(url=f'{api_url}/{endpoint}', json=payload)
             r = response.json()
 
+            # Check if there are images in the response
+            if 'images' not in r or not r['images']:
+                await ctx.reply("No images found in the API response.", mention_author=True)
+                return None
+
             # Decode the image from base64
             img_data = base64.b64decode(r['images'][0])
             img = BytesIO(img_data)
