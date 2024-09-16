@@ -110,15 +110,15 @@ class AcceptRetryDeleteButtons(ui.View):
         result = await self.cog.diy_interaction_check(interaction)
         if not result:
             return
-
+    
         # Disable all buttons and update the "Try Again" label
         self.children[0].disabled = True  # Disable Accept
         self.children[1].label = self.LABEL_DRAWING
         self.children[1].disabled = True  # Disable Try Again
         self.children[2].disabled = True  # Disable Delete
-
+    
         await interaction.response.edit_message(view=self)
-
+    
         # Create a new task ID and retry image generation
         new_task_id = uuid.uuid4().hex
         await self.cog.retry_task(self.ctx, new_task_id, self.payload, self.message, self)
@@ -292,3 +292,11 @@ class ImageGen(commands.Cog):
 
         self.image_generator.remove_task(new_task_id)
         await message.edit(content="Done!", view=view)
+
+    async def diy_interaction_check(self, interaction: Interaction):
+        """Custom interaction check to validate user permissions."""
+        # Only allow the author of the original message to use the buttons
+        if interaction.user == interaction.message.author:
+            return True
+        await interaction.response.send_message("You are not allowed to interact with these buttons.", ephemeral=True)
+        return False
