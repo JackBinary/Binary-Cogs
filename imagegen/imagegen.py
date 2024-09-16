@@ -112,7 +112,6 @@ class ImageGen(commands.Cog):
 
             # Parse response JSON
             response_json = response.json()
-            print(response_json)
 
             # Check if images are in the response
             if 'images' not in response_json or not response_json['images']:
