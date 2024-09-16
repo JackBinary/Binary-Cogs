@@ -94,7 +94,7 @@ class ImageGen(commands.Cog):
             initial_message = await ctx.reply("Generating image... This may take a moment.", mention_author=True)
 
             # Start polling the live preview while the final image is being generated
-            live_preview_task = self.poll_live_preview(ctx, task_id, initial_message)
+            live_preview_task = asyncio.create_task(self.poll_live_preview(ctx, task_id, initial_message))
 
             # Generate the final image
             final_image = await self.generate_image(ctx, payload, 'sdapi/v1/txt2img')
@@ -107,6 +107,10 @@ class ImageGen(commands.Cog):
 
             # Cancel live preview task once the final image is generated
             live_preview_task.cancel()
+            try:
+                await live_preview_task
+            except asyncio.CancelledError:
+                pass
 
     async def generate_image(self, ctx, payload, endpoint):
         """Helper function to send payload to the Stable Diffusion API and return the generated image."""
