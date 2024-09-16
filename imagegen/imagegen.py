@@ -39,6 +39,7 @@ class ImageGenerator:
             if len(self.tasks) >= 1:
                 task = self.tasks.pop(0)
                 task_id = task["id"]
+                print("New Task!",task_id)
                 payload = task["payload"]
                 self.in_progress.append(task_id)
 
@@ -55,6 +56,7 @@ class ImageGenerator:
     def get_progress(self):
         while True:
             for task_id in self.in_progress:
+                print("Updating",task_id)
                 payload = {
                     "id_task": task_id,
                     "id_live_preview": -1,
@@ -162,6 +164,7 @@ class ImageGen(commands.Cog):
         message = await ctx.reply(f"Generating...", mention_author=True)
 
        # Wait for the image generation result and fetch it
+        image = None
         async with ctx.typing():
             base64_image = None  # to track the last image's base64 string
             while True:
