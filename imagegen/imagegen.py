@@ -117,6 +117,7 @@ class ImageGen(commands.Cog):
         }
 
         # Generate the upscaled image
+        await ctx.reply(f"Upscaling image...", mention_author=True)
         final_image = await self.generate_image(ctx, img2img_payload, api_url, 'sdapi/v1/img2img')
 
         # Check if the upscaled image is None
@@ -132,6 +133,9 @@ class ImageGen(commands.Cog):
         try:
             response = requests.post(url=f'{api_url}/{endpoint}', json=payload)
             r = response.json()
+
+            # Log the raw API response for debugging
+            await ctx.send(f"API Response: {r}")
 
             # Check if there are images in the response
             if 'images' not in r or not r['images']:
