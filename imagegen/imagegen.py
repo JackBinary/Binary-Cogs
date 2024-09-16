@@ -70,7 +70,7 @@ class ImageGen(commands.Cog):
 
         # First Image (txt2img)
         payload = {
-            "enable_hr" : true,
+            "enable_hr" : True,
             "hr_cfg" : 2.5,
             "denoising_strength" : 0.7,
             "hr_scale" : 1.3,
@@ -97,10 +97,10 @@ class ImageGen(commands.Cog):
 
         # Check if the image is None
         if image is None:
-            await message.edit(f"Failed to generate the image. Please check the API and try again.")
+            await message.edit(content="Failed to generate the image. Please check the API and try again.")
             return
 
-        # Attach the first image to the original reply
+        # Attach the image to the original reply
         await message.edit(attachments=[File(fp=image, filename=f"{uuid.uuid4().hex}.png")])
 
     async def generate_image(self, ctx, payload, endpoint):
