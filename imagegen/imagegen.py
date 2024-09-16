@@ -2,12 +2,9 @@ import base64
 from io import BytesIO
 import uuid
 import requests
-import discord
 from discord import File
 from redbot.core import commands
-from redbot.core.bot import Red
 from redbot.core.config import Config
-
 
 class ImageGen(commands.Cog):
     """Cog for generating images using Stable Diffusion WebUI API"""
@@ -68,14 +65,14 @@ class ImageGen(commands.Cog):
         positive_prompt = ', '.join(positive_prompt)
         negative_prompt = ', '.join(negative_prompt)
 
-        # First Image (txt2img)
+        # High-Resolution settings for the first Image (txt2img)
         payload = {
-            "enable_hr" : True,
-            "hr_cfg" : 2.5,
-            "denoising_strength" : 0.7,
-            "hr_scale" : 1.3,
-            "hr_second_pass_steps" : 8,
-            "hr_upscaler" : "Latent",
+            "enable_hr": True,
+            "hr_cfg": 2.5,
+            "denoising_strength": 0.7,
+            "hr_scale": 1.3,
+            "hr_second_pass_steps": 8,
+            "hr_upscaler": "Latent",
             "prompt": positive_prompt,
             "hr_prompt": positive_prompt,
             "negative_prompt": negative_prompt,
@@ -91,17 +88,17 @@ class ImageGen(commands.Cog):
             "n_iter": 1
         }
 
-        # Generate initial txt2img image
-        message = await ctx.reply(f"...", mention_author=True)
-        image = await self.generate_image(ctx, payload, 'sdapi/v1/txt2img')
+        # Use typing indicator while generating image
+        async with ctx.typing():
+            image = await self.generate_image(ctx, payload, 'sdapi/v1/txt2img')
 
         # Check if the image is None
         if image is None:
-            await message.edit(content="Failed to generate the image. Please check the API and try again.")
+            await ctx.reply("Failed to generate the image. Please check the API and try again.", mention_author=True)
             return
 
-        # Attach the image to the original reply
-        await message.edit(attachments=[File(fp=image, filename=f"{uuid.uuid4().hex}.png")])
+        # Attach the first image to the original reply
+        await ctx.reply(attachments=[File(fp=image, filename=f"{uuid.uuid4().hex}.png")])
 
     async def generate_image(self, ctx, payload, endpoint):
         """Helper function to send payload to the Stable Diffusion API and return the generated image."""
