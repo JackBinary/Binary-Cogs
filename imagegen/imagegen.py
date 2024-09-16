@@ -140,24 +140,28 @@ class ImageGen(commands.Cog):
     async def poll_live_preview(self, ctx, task_id, message):
         """Polls the live preview endpoint to get image updates and edits the message with the preview."""
         last_preview_image_data = None  # Store the last preview image data for comparison
-
-        while True:
-            asyncio.sleep(0.5)
-            # Poll the live preview endpoint
-            progress_data = await self.get_live_preview(ctx, task_id)
-
-            if progress_data:
-                if progress_data['active']:
-                    try:
-                        current_preview_image_data = progress_data.split(",")[1]
-                    except AttributeError:
-                        continue
-                    if current_preview_image_data == last_preview_image_data:
-                        continue
-                        
-                    preview_image = BytesIO(base64.b64decode(current_preview_image_data))
-                    preview_image.seek(0)
-                    await message.edit(attachments=[File(fp=preview_image, filename=f"{task_id}_preview.png")])
+        
+        try:
+            while True:
+                asyncio.sleep(0.5)
+                # Poll the live preview endpoint
+                progress_data = await self.get_live_preview(ctx, task_id)
+    
+                if progress_data:
+                    if progress_data['active']:
+                        try:
+                            current_preview_image_data = progress_data.split(",")[1]
+                        except AttributeError:
+                            continue
+                        if current_preview_image_data == last_preview_image_data:
+                            continue
+                            
+                        preview_image = BytesIO(base64.b64decode(current_preview_image_data))
+                        preview_image.seek(0)
+                        await message.edit(attachments=[File(fp=preview_image, filename=f"{task_id}_preview.png")])
+        except asyncio.CancelledError:
+            # Live preview polling has been canceled
+            pass
 
     async def get_live_preview(self, ctx, task_id):
         """Helper function to send the request for live preview."""
