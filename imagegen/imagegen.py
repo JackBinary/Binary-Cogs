@@ -5,6 +5,9 @@ import requests
 from discord import File
 from redbot.core import commands
 from redbot.core.config import Config
+import threading
+import asyncio
+import time
 
 class ImageGen(commands.Cog):
     """Cog for generating images using Stable Diffusion WebUI API"""
@@ -43,7 +46,7 @@ class ImageGen(commands.Cog):
         seed = -1  # default to random
         strength = 0.5
 
-        print(task_id,text)
+        print(task_id, text)
 
         for token in tokens:
             if "=" in token:
@@ -92,26 +95,82 @@ class ImageGen(commands.Cog):
             "force_task_id": task_id
         }
 
-        # Use typing indicator while generating image
-        async with ctx.typing():
-            image = await self.generate_image(ctx, payload, 'sdapi/v1/txt2img')
+        # Start the image generation in a new thread
+        threading.Thread(target=self.generate_image_and_track_progress, args=(ctx, payload, task_id)).start()
 
-        # Check if the image is None
+    def generate_image_and_track_progress(self, ctx, payload, task_id):
+        """Run image generation in a separate thread, poll progress, and send live previews."""
+        # Start image generation
+        image = self.generate_image(ctx, payload, 'sdapi/v1/txt2img')
+
+        # If image generation failed, return
         if image is None:
-            await ctx.reply("Failed to generate the image. Please check the API and try again.", mention_author=True)
+            asyncio.run_coroutine_threadsafe(
+                ctx.reply("Failed to generate the image. Please check the API and try again.", mention_author=True),
+                self.bot.loop
+            )
             return
 
-        # send the image
-        await ctx.reply(file=File(fp=image, filename=f"{task_id}.png"), mention_author=True)
+        # Check for live previews while image is being generated
+        self.poll_progress_and_send_preview(ctx, task_id)
 
-    async def generate_image(self, ctx, payload, endpoint):
+        # Once the image is fully generated, send the final image
+        asyncio.run_coroutine_threadsafe(
+            ctx.reply(file=File(fp=image, filename=f"{task_id}.png"), mention_author=True),
+            self.bot.loop
+        )
+
+    def poll_progress_and_send_preview(self, ctx, task_id):
+        """Poll the progress endpoint and send live previews to Discord."""
+        api_url = asyncio.run(self.config.api_url())
+        progress_endpoint = f"{api_url}/internal/progress"
+
+        while True:
+            try:
+                # Send request to check progress
+                response = requests.post(progress_endpoint, json={"id_task": task_id})
+                response.raise_for_status()
+
+                # Parse the response
+                progress_data = response.json()
+
+                # Check if the task is completed
+                if progress_data.get("completed", False):
+                    break
+
+                # Check for a live preview
+                live_preview_data = progress_data.get("live_preview", None)
+                if live_preview_data:
+                    # Decode the live preview image
+                    live_preview_image_data = live_preview_data.split(",")[1]
+                    live_preview_image = base64.b64decode(live_preview_image_data)
+                    image_bytes = BytesIO(live_preview_image)
+                    image_bytes.seek(0)
+
+                    # Send the live preview image to Discord
+                    asyncio.run_coroutine_threadsafe(
+                        ctx.reply(file=File(fp=image_bytes, filename=f"live_preview_{task_id}.jpg")),
+                        self.bot.loop
+                    )
+
+                # Sleep for a bit before checking again
+                time.sleep(2)
+
+            except requests.RequestException as e:
+                asyncio.run_coroutine_threadsafe(
+                    ctx.reply(f"An error occurred while polling for progress: {str(e)}", mention_author=True),
+                    self.bot.loop
+                )
+                break
+
+    def generate_image(self, ctx, payload, endpoint):
         """Helper function to send payload to the Stable Diffusion API and return the generated image."""
         try:
             # Get the API URL from the config
-            api_url = await self.config.api_url()
+            api_url = asyncio.run(self.config.api_url())
 
             # Set a timeout for the API request
-            response = requests.post(f"{api_url}/{endpoint}", json=payload, timeout=30)  # Set timeout to 30 seconds
+            response = requests.post(f"{api_url}/{endpoint}", json=payload, timeout=30)
             response.raise_for_status()
 
             # Parse response JSON
@@ -119,7 +178,10 @@ class ImageGen(commands.Cog):
 
             # Check if images are in the response
             if 'images' not in response_json or not response_json['images']:
-                await ctx.reply("No images found in the API response.")
+                asyncio.run_coroutine_threadsafe(
+                    ctx.reply("No images found in the API response."),
+                    self.bot.loop
+                )
                 return None
 
             # Decode the base64-encoded image and return it as a BytesIO object
@@ -129,9 +191,15 @@ class ImageGen(commands.Cog):
             return image
 
         except requests.exceptions.Timeout:
-            await ctx.reply("The request to the API timed out. Please try again later.", mention_author=True)
+            asyncio.run_coroutine_threadsafe(
+                ctx.reply("The request to the API timed out. Please try again later.", mention_author=True),
+                self.bot.loop
+            )
             return None
 
         except Exception as e:
-            await ctx.reply(f"An error occurred while generating the image: {str(e)}", mention_author=True)
+            asyncio.run_coroutine_threadsafe(
+                ctx.reply(f"An error occurred while generating the image: {str(e)}", mention_author=True),
+                self.bot.loop
+            )
             return None
