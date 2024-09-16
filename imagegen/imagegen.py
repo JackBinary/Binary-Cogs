@@ -307,6 +307,7 @@ class ImageGen(commands.Cog):
 
             await asyncio.sleep(1)  # Poll every second
 
+        await message.edit(content="Done!")
         # Re-enable the buttons after retry
         view.children[1].label = view.LABEL_TRY_AGAIN
         for child in view.children:
