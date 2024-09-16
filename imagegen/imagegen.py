@@ -206,4 +206,4 @@ class ImageGen(commands.Cog):
 
             # Final cleanup after the image is complete
             self.image_generator.remove_task(task_id)
-        await message.edit(content="Done!", attachments=[File(fp=buffer, filename=f"{task_id}.png")])
+        await message.edit(content="Done!")
