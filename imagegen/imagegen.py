@@ -1,11 +1,9 @@
 import base64
 from io import BytesIO
-import json
 import uuid
 import requests
 import discord
-import os
-import re
+from discord import File
 from redbot.core import commands
 from redbot.core.bot import Red
 from redbot.core.config import Config
