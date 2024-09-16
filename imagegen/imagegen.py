@@ -116,7 +116,7 @@ class ImageGen(commands.Cog):
         }
 
         # Generate the upscaled image
-        final_image = await self.generate_image(ctx, img2img_payload, api_url, 'sdapi/v1/img2img')
+        final_image = await self.generate_image(ctx, img2img_payload, 'sdapi/v1/img2img')
 
         # Check if the upscaled image is None
         if final_image is None:
