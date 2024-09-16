@@ -85,12 +85,12 @@ class ImageGen(commands.Cog):
 
 
         # Generate initial txt2img image
-        message = await ctx.reply(f"Generating initial image...", mention_author=True)
+        message = await ctx.reply(f"...", mention_author=True)
         image = await self.generate_image(ctx, payload, 'sdapi/v1/txt2img')
 
         # Check if the image is None
         if image is None:
-            await message.edit(f"Failed to generate the image. Please check the API and try again.", mention_author=True)
+            await message.edit(f"Failed to generate the image. Please check the API and try again.")
             return
 
         # Attach the first image to the original reply
@@ -116,12 +116,11 @@ class ImageGen(commands.Cog):
         }
 
         # Generate the upscaled image
-        await message.edit(f"Upscaling image...", mention_author=True)
         final_image = await self.generate_image(ctx, img2img_payload, api_url, 'sdapi/v1/img2img')
 
         # Check if the upscaled image is None
         if final_image is None:
-            await message.edit(f"Failed to upscale the image. Please check the API and try again.", mention_author=True)
+            await message.edit(f"Something went wrong!")
             return
 
         # Replace the previous image with the upscaled one
@@ -142,7 +141,7 @@ class ImageGen(commands.Cog):
 
             # Check if images are in the response
             if 'images' not in response_json or not response_json['images']:
-                await ctx.reply("No images found in the API response.", mention_author=True)
+                await ctx.reply("No images found in the API response.")
                 return None
 
             # Decode the base64-encoded image and return it as a BytesIO object
