@@ -45,7 +45,6 @@ async def draw(self, ctx, *, text: str):
     width, height = 832, 1216
     upscale_width, upscale_height = 1080, 1576
     seed = -1  # default to random
-    strength = 0.5
 
     for token in tokens:
         if "=" in token:
@@ -80,7 +79,7 @@ async def draw(self, ctx, *, text: str):
         "height": height,
         "cfg_scale": 2.5,
         "sampler_index": "Euler a",
-        "scheduler": "SGM Uniform",
+        "scheduler": "SGM Uniform"
     }
 
     api_url = await self.config.api_url()
@@ -108,7 +107,6 @@ async def draw(self, ctx, *, text: str):
         "sampler_index": "Euler a",
         "scheduler": "SGM Uniform",
         "init_images": [init_image_base64],
-        "denoising_strength": strength
     }
 
     # Generate the upscaled image
