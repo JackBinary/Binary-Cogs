@@ -101,7 +101,7 @@ class AcceptRetryDeleteButtons(ui.View):
         """Accept the generated image."""
         # Disable the buttons and update the message
         self.clear_items()
-        await interaction.response.edit_message(content="Accepted!", view=self)
+        await interaction.response.edit_message(content="", view=self)
 
         # Cancel the timeout since we've accepted
         self.stop()
