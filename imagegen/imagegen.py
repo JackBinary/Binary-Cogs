@@ -85,16 +85,16 @@ class ImageGen(commands.Cog):
 
 
         # Generate initial txt2img image
-        await ctx.reply(f"Generating initial image...", mention_author=True)
+        message = await ctx.reply(f"Generating initial image...", mention_author=True)
         image = await self.generate_image(ctx, payload, 'sdapi/v1/txt2img')
 
         # Check if the image is None
         if image is None:
-            await ctx.reply(f"Failed to generate the image. Please check the API and try again.", mention_author=True)
+            await message.edit(f"Failed to generate the image. Please check the API and try again.", mention_author=True)
             return
 
-        # Send the first image to the user as a reply
-        message = await ctx.reply(file=File(fp=image, filename=f"{uuid.uuid4().hex}.png"))
+        # Attach the first image to the original reply
+        await message.edit(attachments=[File(fp=image, filename=f"{uuid.uuid4().hex}.png")])
 
         # Upscaling Image
         image.seek(0)  # Ensure the pointer is at the start of the file
@@ -116,12 +116,12 @@ class ImageGen(commands.Cog):
         }
 
         # Generate the upscaled image
-        await ctx.reply(f"Upscaling image...", mention_author=True)
+        await message.edit(f"Upscaling image...", mention_author=True)
         final_image = await self.generate_image(ctx, img2img_payload, api_url, 'sdapi/v1/img2img')
 
         # Check if the upscaled image is None
         if final_image is None:
-            await ctx.reply(f"Failed to upscale the image. Please check the API and try again.", mention_author=True)
+            await message.edit(f"Failed to upscale the image. Please check the API and try again.", mention_author=True)
             return
 
         # Replace the previous image with the upscaled one
