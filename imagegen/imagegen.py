@@ -5,6 +5,7 @@ import requests
 from discord import File
 from redbot.core import commands
 from redbot.core.config import Config
+import concurrent.futures
 
 class ImageGen(commands.Cog):
     """Cog for generating images using Stable Diffusion WebUI API"""
@@ -15,6 +16,9 @@ class ImageGen(commands.Cog):
         self.config = Config.get_conf(self, identifier=1234567890, force_registration=True)
         default_global = {"api_url": "http://127.0.0.1:7860"}
         self.config.register_global(**default_global)
+
+        # Create a thread pool for image generation
+        self.executor = concurrent.futures.ThreadPoolExecutor()
 
     @commands.command()
     async def setapiurl(self, ctx, url: str):
@@ -43,7 +47,7 @@ class ImageGen(commands.Cog):
         seed = -1  # default to random
         strength = 0.5
 
-        print(task_id,text)
+        print(task_id, text)
 
         for token in tokens:
             if "=" in token:
@@ -92,23 +96,27 @@ class ImageGen(commands.Cog):
             "force_task_id": task_id
         }
 
-        # Use typing indicator while generating image
-        async with ctx.typing():
-            image = await self.generate_image(ctx, payload, 'sdapi/v1/txt2img')
+        # Run image generation in a separate thread
+        await ctx.reply(f"Started image generation task: {task_id}", mention_author=True)
+        loop = self.bot.loop
+        loop.run_in_executor(self.executor, self.generate_and_send_image, ctx, payload, task_id)
 
-        # Check if the image is None
-        if image is None:
-            await ctx.reply("Failed to generate the image. Please check the API and try again.", mention_author=True)
-            return
+    def generate_and_send_image(self, ctx, payload, task_id):
+        """Runs the image generation and sends the result asynchronously."""
+        # Run the image generation in the background
+        image = self.generate_image_sync(ctx, payload, 'sdapi/v1/txt2img')
 
-        # send the image
-        await ctx.reply(file=File(fp=image, filename=f"{task_id}.png"), mention_author=True)
+        # Schedule the sending of the image back to Discord
+        if image:
+            self.bot.loop.create_task(self.send_image(ctx, image, task_id))
+        else:
+            self.bot.loop.create_task(ctx.reply(f"Failed to generate the image. Please check the API and try again.", mention_author=True))
 
-    async def generate_image(self, ctx, payload, endpoint):
-        """Helper function to send payload to the Stable Diffusion API and return the generated image."""
+    def generate_image_sync(self, ctx, payload, endpoint):
+        """Helper function to synchronously send payload to the Stable Diffusion API and return the generated image."""
         try:
             # Get the API URL from the config
-            api_url = await self.config.api_url()
+            api_url = self.bot.loop.run_until_complete(self.config.api_url())
 
             # Set a timeout for the API request
             response = requests.post(f"{api_url}/{endpoint}", json=payload, timeout=30)  # Set timeout to 30 seconds
@@ -119,7 +127,6 @@ class ImageGen(commands.Cog):
 
             # Check if images are in the response
             if 'images' not in response_json or not response_json['images']:
-                await ctx.reply("No images found in the API response.")
                 return None
 
             # Decode the base64-encoded image and return it as a BytesIO object
@@ -129,9 +136,11 @@ class ImageGen(commands.Cog):
             return image
 
         except requests.exceptions.Timeout:
-            await ctx.reply("The request to the API timed out. Please try again later.", mention_author=True)
             return None
 
         except Exception as e:
-            await ctx.reply(f"An error occurred while generating the image: {str(e)}", mention_author=True)
-            return Non
+            return None
+
+    async def send_image(self, ctx, image, task_id):
+        """Sends the generated image asynchronously to the user."""
+        await ctx.reply(file=File(fp=image, filename=f"{task_id}.png"), mention_author=True)
