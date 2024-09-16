@@ -43,7 +43,8 @@ class ImageGen(commands.Cog):
         width, height = 832, 1216
         upscale_width, upscale_height = 1080, 1576
         seed = -1  # default to random
-    
+        strength = 0.5
+
         for token in tokens:
             if "=" in token:
                 key, value = token.split("=", 1)
@@ -63,10 +64,10 @@ class ImageGen(commands.Cog):
                 negative_prompt.append(token.lstrip("-").strip())
             else:
                 positive_prompt.append(token)
-    
+
         positive_prompt = ', '.join(positive_prompt)
         negative_prompt = ', '.join(negative_prompt)
-    
+
         # First Image (txt2img)
         payload = {
             "prompt": positive_prompt,
@@ -77,22 +78,29 @@ class ImageGen(commands.Cog):
             "height": height,
             "cfg_scale": 2.5,
             "sampler_index": "Euler a",
-            "scheduler": "SGM Uniform"
+            "scheduler": "SGM Uniform",
+            "n_iter": 1,
+            "batch_size": 1
         }
-    
+
         api_url = await self.config.api_url()
-    
+
         # Generate initial txt2img image
         await ctx.reply(f"Generating initial image...", mention_author=True)
         image = await self.generate_image(ctx, payload, api_url, 'sdapi/v1/txt2img')
-    
+
+        # Check if the image is None
+        if image is None:
+            await ctx.reply(f"Failed to generate the image. Please check the API and try again.", mention_author=True)
+            return
+
         # Send the first image to the user as a reply
         message = await ctx.reply(file=File(fp=image, filename=f"{uuid.uuid4().hex}.png"))
-    
-        # Prepare the image for img2img upscaling
+
+        # Upscaling Image
         image.seek(0)  # Ensure the pointer is at the start of the file
         init_image_base64 = base64.b64encode(image.getvalue()).decode('utf-8')
-    
+
         # Prepare img2img payload
         img2img_payload = {
             "prompt": positive_prompt,
@@ -105,11 +113,17 @@ class ImageGen(commands.Cog):
             "sampler_index": "Euler a",
             "scheduler": "SGM Uniform",
             "init_images": [init_image_base64],
+            "denoising_strength": strength
         }
-    
+
         # Generate the upscaled image
         final_image = await self.generate_image(ctx, img2img_payload, api_url, 'sdapi/v1/img2img')
-    
+
+        # Check if the upscaled image is None
+        if final_image is None:
+            await ctx.reply(f"Failed to upscale the image. Please check the API and try again.", mention_author=True)
+            return
+
         # Replace the previous image with the upscaled one
         await message.edit(attachments=[File(fp=final_image, filename=f"{uuid.uuid4().hex}.png")])
 
