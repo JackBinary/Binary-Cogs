@@ -139,23 +139,38 @@ class ImageGen(commands.Cog):
 
     async def poll_live_preview(self, ctx, task_id, message):
         """Polls the live preview endpoint to get image updates and edits the message with the preview."""
+        last_preview_image_data = None  # Store the last preview image data for comparison
+    
         try:
             while True:
                 # Poll the live preview endpoint
                 progress_data = await self.get_live_preview(ctx, task_id)
-
+    
                 if progress_data and 'live_preview' in progress_data:
-                    preview_image_data = progress_data['live_preview'].split(',')[1]
-                    preview_image = BytesIO(base64.b64decode(preview_image_data))
-                    preview_image.seek(0)
-
-                    # Update the message with the live preview image
-                    await message.edit(content="Generating image... Here is the live preview:",
-                                       attachments=[File(fp=preview_image, filename=f"{task_id}_preview.png")])
-
-                # Wait for a few seconds before polling again
-                await asyncio.sleep(2)
-
+                    try:
+                        # Extract the current preview image data
+                        current_preview_image_data = progress_data['live_preview'].split(',')[1]
+    
+                        # Only send an update if the preview image has changed
+                        if current_preview_image_data != last_preview_image_data:
+                            # Decode and prepare the image
+                            preview_image = BytesIO(base64.b64decode(current_preview_image_data))
+                            preview_image.seek(0)
+    
+                            # Update the message with the live preview image
+                            await message.edit(content="Generating image... Here is the live preview:",
+                                               attachments=[File(fp=preview_image, filename=f"{task_id}_preview.png")])
+    
+                            # Update the last preview image data
+                            last_preview_image_data = current_preview_image_data
+    
+                    except (IndexError, ValueError) as e:
+                        # If the live_preview data is invalid, just retry the loop after a short delay
+                        pass
+    
+                # Wait for a short interval before polling again
+                await asyncio.sleep(0.5)  # Poll every 0.5 seconds for faster updates
+    
         except asyncio.CancelledError:
             # Live preview polling has been canceled
             pass
