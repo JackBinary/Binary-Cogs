@@ -27,7 +27,7 @@ class ImageGenerator:
 
     def new_task(self, task_id, payload):
         self.tasks.append({"id": task_id, "payload": payload})
-        
+
     def callback(self, task_id):
         if task_id in self.images:
             return self.images[task_id]
@@ -48,10 +48,8 @@ class ImageGenerator:
                 response_json = response.json()
                 if 'images' in response_json:
                     self.in_progress.remove(task_id)
-                    image_data = base64.b64decode(response_json['images'][0])
-                    image = BytesIO(image_data)
-                    image.seek(0)
-                    self.images[task_id] = {"image": True, "data": image, "complete": True}
+                    image_base64 = response_json['images'][0]
+                    self.images[task_id] = {"image": image_base64, "complete": True}
             sleep(1)
 
     def get_progress(self):
@@ -66,12 +64,9 @@ class ImageGenerator:
                 response.raise_for_status()
                 response_json = response.json()
                 if 'images' in response_json:
-                    image_data = base64.b64decode(response_json['images'][0])
-                    image = BytesIO(image_data)
-                    image.seek(0)
-                    self.images[task_id] = {"image": True, "data": image, "complete": False}
+                    image_base64 = response_json['images'][0]
+                    self.images[task_id] = {"image": image_base64, "complete": False}
             sleep(1)
-
 
 class ImageGen(commands.Cog):
     """Cog for generating images using Stable Diffusion WebUI API with ImageGenerator."""
@@ -163,16 +158,24 @@ class ImageGen(commands.Cog):
         self.image_generator.new_task(task_id, payload)
 
         # Inform the user that the task has been submitted
-        await ctx.reply(f"Image generation task submitted. Task ID: {task_id}", mention_author=True)
+        message = await ctx.reply(f"Image generation task submitted. Task ID: {task_id}", mention_author=True)
 
-        # Wait for the image generation result and fetch it
+       # Wait for the image generation result and fetch it
         async with ctx.typing():
+            base64_image = None  # to track the last image's base64 string
             while True:
                 result = self.image_generator.callback(task_id)
-                if result and result["complete"]:
-                    image_data = result["data"]
-                    break
+                if result:
+                    current_image_base64 = result["image"]
+                    if current_image_base64 != base64_image:  # Check if new image base64 string exists
+                        base64_image = current_image_base64
+                        # Decode the base64 string only when sending the image
+                        image_data = base64.b64decode(base64_image)
+                        image = BytesIO(image_data)
+                        image.seek(0)
+                        await message.edit(attachments=[File(fp=image, filename=f"{task_id}.png")])
+    
+                    if result["complete"]:
+                        break
+    
                 await asyncio.sleep(1)  # Poll every second
-
-        # Send the final image to the user
-        await ctx.reply(file=File(fp=image_data, filename=f"{task_id}.png"), mention_author=True)
