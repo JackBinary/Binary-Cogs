@@ -6,7 +6,6 @@ from discord import File
 from redbot.core import commands
 from redbot.core.config import Config
 import threading
-import asyncio
 import time
 
 class ImageGen(commands.Cog):
@@ -93,14 +92,14 @@ class ImageGen(commands.Cog):
             "force_task_id": task_id
         }
 
+        # Fetch the API URL in the main event loop
+        api_url = await self.config.api_url()
+
         # Start the image generation in a new thread
-        threading.Thread(target=self.generate_image_and_track_progress, args=(ctx, payload, task_id)).start()
+        threading.Thread(target=self.generate_image_and_track_progress, args=(ctx, payload, task_id, api_url)).start()
 
-    def generate_image_and_track_progress(self, ctx, payload, task_id):
+    def generate_image_and_track_progress(self, ctx, payload, task_id, api_url):
         """Run image generation in a separate thread, poll progress, and send live previews."""
-        # Fetch the API URL in a thread-safe manner
-        api_url = asyncio.run_coroutine_threadsafe(self.config.api_url(), self.bot.loop).result()
-
         # Start image generation
         image = self.generate_image(ctx, payload, f'{api_url}/sdapi/v1/txt2img')
 
