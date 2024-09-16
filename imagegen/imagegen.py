@@ -1,91 +1,19 @@
-import uuid
-import base64
-import requests
-import threading
-from time import sleep
-from io import BytesIO
-from discord import File
-from redbot.core import commands
-from redbot.core.config import Config
-import asyncio
-
-class ImageGenerator:
-    def __init__(self):
-        self.api_url = "http://127.0.0.1:7860"
-        self.txt2img = "sdapi/v1/txt2img"
-        self.progress = "/internal/progress"
-        self.tasks = []
-        self.in_progress = []
-        self.images = {}
-        generator_thread = threading.Thread(target=generator)
-        progress_thread = threading.Thread(target=get_progress)
-        generator_thread.start()
-        progress_thread.start()
-
-    def set_url(self, url):
-        self.api_url = url
-
-    def new_task(self, task_id, payload):
-        self.tasks.append({"id":task_id,"payload":payload})
-        
-    def callback(self, task_id):
-        if task_id in images:
-            return images[task_id]
-        else:
-            return False
-
-    def generator(self):
-        while True:
-            if len(self.tasks) >= 1:
-                task = self.tasks.pop(0)
-                task_id = task["id"]
-                payload = task["payload"]
-                self.in_progress.append(task_id)
-
-                # Generate image
-                response = requests.post(f"{self.api_url}/{self.txt2img}", json=payload, timeout=60)
-                response.raise_for_status()
-                response_json = response.json()
-                if 'images' in response_json:
-                    self.in_progress.remove(task_id)
-                    image_data = base64.b64decode(response_json['images'][0])
-                    image = BytesIO(image_data)
-                    image.seek(0)
-                    self.images[task_id] = {"image":True,"data":image,"complete":True}
-            sleep(1)
-
-    def get_progress(self, in_progress):
-        while True:
-            for task_id in self.in_progress:
-                payload = {
-                    "id_task": task_id,
-                    "id_live_preview": -1,
-                    "live_preview": true
-                }
-                response = requests.post(f"{self.api_url}/{self.progress}", json=payload, timeout=60)
-                response.raise_for_status()
-                response_json = response.json()
-                if 'images' in response_json:
-                    image_data = base64.b64decode(response_json['images'][0])
-                    image = BytesIO(image_data)
-                    image.seek(0)
-                    self.images[task_id] = {"image":True,"data":image,"complete":False}
-                
-            sleep(1)
-        
-class ImageGen(commands.Cog):
+class ImageGenCog(commands.Cog):
     """Cog for generating images using Stable Diffusion WebUI API with ImageGenerator."""
 
     def __init__(self, bot):
         self.bot = bot
-        # Initialize Config with default settings
         self.config = Config.get_conf(self, identifier=1234567890, force_registration=True)
         default_global = {"api_url": "http://127.0.0.1:7860"}
         self.config.register_global(**default_global)
 
-        # Initialize ImageGenerator
-        api_url = self.bot.loop.run_until_complete(self.config.api_url())
+        # Initialize ImageGenerator without setting the API URL yet
         self.image_generator = ImageGenerator()
+
+    @commands.Cog.listener()
+    async def on_ready(self):
+        # Set API URL when the bot is ready
+        api_url = await self.config.api_url()
         self.image_generator.set_url(api_url)
 
     @commands.command()
