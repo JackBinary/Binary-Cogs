@@ -2,7 +2,6 @@ import base64
 from io import BytesIO
 import uuid
 import requests
-import asyncio
 from discord import File
 from redbot.core import commands
 from redbot.core.config import Config
@@ -32,13 +31,14 @@ class ImageGen(commands.Cog):
     @commands.command(name="draw")
     async def draw(self, ctx, *, text: str):
         """
-        Generate images in Discord with real-time live preview tracking using txt2img.
+        Generate images in Discord with txt2img followed by img2img for upscaling!
         """
         tokens = [token.strip() for token in text.split(",")]
         positive_prompt = []
         negative_prompt = []
         # Default to portrait (both initial and upscaled resolutions)
         width, height = 832, 1216
+        upscale_width, upscale_height = 1080, 1576
         seed = -1  # default to random
         strength = 0.5
 
@@ -48,11 +48,11 @@ class ImageGen(commands.Cog):
                 key, value = key.strip(), value.strip()
                 if key == "aspect":
                     if value == "portrait":
-                        width, height = 832, 1216
+                        width, height, upscale_width, upscale_height = 832, 1216, 1080, 1576
                     elif value == "square":
-                        width, height = 1024, 1024
+                        width, height, upscale_width, upscale_height = 1024, 1024, 1328, 1328
                     elif value == "landscape":
-                        width, height = 1216, 832
+                        width, height, upscale_width, upscale_height = 1216, 832, 1576, 1080
                 if key == "seed":
                     seed = int(value)
                 if key == "strength":
@@ -88,108 +88,26 @@ class ImageGen(commands.Cog):
             "n_iter": 1
         }
 
-        # Start image generation in the background
+        # Use typing indicator while generating image
         async with ctx.typing():
-            task_id = await self.start_image_generation(ctx, payload, 'sdapi/v1/txt2img')
-
-            # If task_id is None, image generation failed
-            if task_id is None:
-                await ctx.reply("Failed to start image generation. Please check the API.", mention_author=True)
-                return
-
-            # Send an initial message to the user that will be edited later
-            message = await ctx.send("Starting image generation...")
-
-            # Start polling the progress endpoint and updating the message with live previews
-            await self.track_progress_with_live_preview(ctx, task_id, message)
-
-            # After the progress completes, retrieve the final image
-            image = await self.get_generated_image(ctx, payload, 'sdapi/v1/txt2img')
+            image = await self.generate_image(ctx, payload, 'sdapi/v1/txt2img')
 
         # Check if the image is None
         if image is None:
-            await message.edit(content="Failed to generate the final image. Please check the API and try again.")
+            await ctx.reply("Failed to generate the image. Please check the API and try again.", mention_author=True)
             return
 
-        # Send the final image in the same message
-        await message.edit(content="", attachments=[File(fp=image, filename=f"{uuid.uuid4().hex}.png")])
+        # send the image
+        await ctx.reply(file=File(fp=image, filename=f"{uuid.uuid4().hex}.png"), mention_author=True)
 
-    async def start_image_generation(self, ctx, payload, endpoint):
-        """Start the image generation task and return the task ID."""
+    async def generate_image(self, ctx, payload, endpoint):
+        """Helper function to send payload to the Stable Diffusion API and return the generated image."""
         try:
             # Get the API URL from the config
             api_url = await self.config.api_url()
 
-            # Start the image generation task
-            response = requests.post(f"{api_url}/{endpoint}", json=payload)
-            response.raise_for_status()
-
-            # Parse response JSON
-            response_json = response.json()
-
-            # Assuming task ID is returned in the response (modify this according to your API)
-            return response_json.get("id_task")
-
-        except Exception as e:
-            await ctx.reply(f"An error occurred while starting image generation: {str(e)}", mention_author=True)
-            return None
-
-    async def track_progress_with_live_preview(self, ctx, task_id, message):
-        """Track the progress of the image generation and update live previews."""
-        try:
-            api_url = await self.config.api_url()
-
-            previous_live_preview = None  # To track if live preview has changed
-
-            # Poll the progress endpoint every 5 seconds
-            while True:
-                progress_payload = {
-                    "id_task": task_id,
-                    "id_live_preview": -1,
-                    "live_preview": True
-                }
-                response = requests.post(f"{api_url}/internal/progress", json=progress_payload)
-                response.raise_for_status()
-                progress = response.json()
-
-                # Check if the task is complete
-                if progress.get("completed", False):
-                    break
-
-                # Extract progress info
-                progress_percentage = progress.get("progress", 0) * 100
-                eta = progress.get("eta", 0)
-
-                # Extract the live preview image
-                live_preview_data = progress.get("live_preview")
-                if live_preview_data and live_preview_data != previous_live_preview:
-                    # Decode the live preview image
-                    live_preview_image = BytesIO(base64.b64decode(live_preview_data))
-                    live_preview_image.seek(0)
-
-                    # Edit the message with the updated live preview
-                    await message.edit(
-                        content=f"Progress: {progress_percentage:.2f}% - ETA: {eta:.2f} seconds",
-                        attachments=[File(fp=live_preview_image, filename=f"live_preview_{uuid.uuid4().hex}.png")]
-                    )
-
-                    # Update the previous live preview to avoid redundant updates
-                    previous_live_preview = live_preview_data
-
-                # Sleep for 5 seconds before polling again
-                await asyncio.sleep(5)
-
-        except Exception as e:
-            await ctx.reply(f"An error occurred while tracking progress: {str(e)}", mention_author=True)
-
-    async def get_generated_image(self, ctx, payload, endpoint):
-        """Retrieve the final generated image."""
-        try:
-            # Get the API URL from the config
-            api_url = await self.config.api_url()
-
-            # Sending request to the API to get the image
-            response = requests.post(f"{api_url}/{endpoint}", json=payload)
+            # Set a timeout for the API request
+            response = requests.post(f"{api_url}/{endpoint}", json=payload, timeout=30)  # Set timeout to 30 seconds
             response.raise_for_status()
 
             # Parse response JSON
@@ -206,6 +124,10 @@ class ImageGen(commands.Cog):
             image.seek(0)
             return image
 
-        except Exception as e:
-            await ctx.reply(f"An error occurred while retrieving the image: {str(e)}", mention_author=True)
+        except requests.exceptions.Timeout:
+            await ctx.reply("The request to the API timed out. Please try again later.", mention_author=True)
             return None
+
+        except Exception as e:
+            await ctx.reply(f"An error occurred while generating the image: {str(e)}", mention_author=True)
+            return Non
