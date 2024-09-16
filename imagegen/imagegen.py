@@ -97,8 +97,8 @@ class ImageGen(commands.Cog):
         async with ctx.typing():
             image = None
             thread = Thread(target=self.generate_image,args=(ctx, payload, 'sdapi/v1/txt2img', image))
-            await thread.start()
-            await thread.join()
+            thread.start()
+            thread.join()
 
         # Check if the image is None
         if image is None:
