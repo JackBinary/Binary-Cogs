@@ -191,7 +191,7 @@ class ImageGen(commands.Cog):
 
                         # Resize the image to the final dimensions
                         with Image.open(image) as img:
-                            img = img.resize((final_width, final_height), Image.ANTIALIAS)
+                            img = img.resize((final_width, final_height), Image.Resampling.LANCZOS)
                             buffer = BytesIO()
                             img.save(buffer, format="PNG")
                             buffer.seek(0)
