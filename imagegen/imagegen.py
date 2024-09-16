@@ -77,17 +77,16 @@ class ImageGen(commands.Cog):
             "width": width,
             "height": height,
             "cfg_scale": 2.5,
-            "sampler_index": "Euler a",
+            "sampler_name": "Euler a",
             "scheduler": "SGM Uniform",
-            "n_iter": 1,
-            "batch_size": 1
+            "batch_size": 1,
+            "n_iter": 1
         }
 
-        api_url = await self.config.api_url()
 
         # Generate initial txt2img image
         await ctx.reply(f"Generating initial image...", mention_author=True)
-        image = await self.generate_image(ctx, payload, api_url, 'sdapi/v1/txt2img')
+        image = await self.generate_image(ctx, payload, 'sdapi/v1/txt2img')
 
         # Check if the image is None
         if image is None:
@@ -128,27 +127,30 @@ class ImageGen(commands.Cog):
         # Replace the previous image with the upscaled one
         await message.edit(attachments=[File(fp=final_image, filename=f"{uuid.uuid4().hex}.png")])
 
-    async def generate_image(self, ctx, payload, api_url, endpoint):
+    async def generate_image(self, ctx, payload, endpoint):
         """Helper function to send payload to the Stable Diffusion API and return the generated image."""
         try:
-            response = requests.post(url=f'{api_url}/{endpoint}', json=payload)
-            r = response.json()
+            # Get the API URL from the config
+            api_url = await self.config.api_url()
 
-            # Log the raw API response for debugging
-            await ctx.send(f"API Response: {r}")
+            # Sending request to the API
+            response = requests.post(f"{api_url}/{endpoint}", json=payload)
+            response.raise_for_status()
 
-            # Check if there are images in the response
-            if 'images' not in r or not r['images']:
+            # Parse response JSON
+            response_json = response.json()
+
+            # Check if images are in the response
+            if 'images' not in response_json or not response_json['images']:
                 await ctx.reply("No images found in the API response.", mention_author=True)
                 return None
 
-            # Decode the image from base64
-            img_data = base64.b64decode(r['images'][0])
-            img = BytesIO(img_data)
-            img.seek(0)
-
-            return img
+            # Decode the base64-encoded image and return it as a BytesIO object
+            image_data = base64.b64decode(response_json['images'][0])
+            image = BytesIO(image_data)
+            image.seek(0)
+            return image
 
         except Exception as e:
-            await ctx.reply(f"An error occurred: {str(e)}", mention_author=True)
+            await ctx.reply(f"An error occurred while generating the image: {str(e)}", mention_author=True)
             return None
