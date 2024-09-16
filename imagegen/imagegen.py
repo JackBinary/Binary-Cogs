@@ -143,22 +143,21 @@ class ImageGen(commands.Cog):
 
         while True:
             asyncio.sleep(0.5)
-            try:
-                # Poll the live preview endpoint
-                progress_data = await self.get_live_preview(ctx, task_id)
-    
-                if progress_data:
-                    if progress_data['active']:
-                        try:
-                            current_preview_image_data = progress_data.split(",")[1]
-                        except AttributeError:
-                            continue
-                        if current_preview_image_data == last_preview_image_data:
-                            continue
-                            
-                        preview_image = BytesIO(base64.b64decode(current_preview_image_data))
-                        preview_image.seek(0)
-                        await message.edit(attachments=[File(fp=preview_image, filename=f"{task_id}_preview.png")])
+            # Poll the live preview endpoint
+            progress_data = await self.get_live_preview(ctx, task_id)
+
+            if progress_data:
+                if progress_data['active']:
+                    try:
+                        current_preview_image_data = progress_data.split(",")[1]
+                    except AttributeError:
+                        continue
+                    if current_preview_image_data == last_preview_image_data:
+                        continue
+                        
+                    preview_image = BytesIO(base64.b64decode(current_preview_image_data))
+                    preview_image.seek(0)
+                    await message.edit(attachments=[File(fp=preview_image, filename=f"{task_id}_preview.png")])
 
     async def get_live_preview(self, ctx, task_id):
         """Helper function to send the request for live preview."""
