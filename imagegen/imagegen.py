@@ -157,7 +157,8 @@ class ImageGen(commands.Cog):
             "cfg_scale": 2.5,
             "sampler_name": "Euler a",
             "batch_size": 1,
-            "n_iter": 1
+            "n_iter": 1,
+            "force_task_id":task_id
         }
 
         # Add the task to the ImageGenerator queue
