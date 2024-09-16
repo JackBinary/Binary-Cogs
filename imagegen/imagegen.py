@@ -5,7 +5,9 @@ import threading
 from time import sleep
 from io import BytesIO
 from PIL import Image
-from discord import File, ui, Interaction
+from discord import File, ButtonStyle, Interaction
+from discord.ext import commands
+import discord.ui as ui
 from redbot.core import commands
 from redbot.core.config import Config
 import asyncio
@@ -97,12 +99,12 @@ class AcceptRetryDeleteButtons(ui.View):
         """Handle the default action after timeout (Accept button)"""
         await self.message.edit(content="Accepted by default (timeout)", view=None)
 
-    @ui.button(label="Accept", style=discord.ButtonStyle.green)
+    @ui.button(label="Accept", style=ButtonStyle.green)
     async def accept(self, interaction: Interaction, button: ui.Button):
         """Remove buttons, leave the image as is"""
         await interaction.response.edit_message(view=None)  # Removes the buttons
 
-    @ui.button(label="Try Again", style=discord.ButtonStyle.blurple)
+    @ui.button(label="Try Again", style=ButtonStyle.blurple)
     async def try_again(self, interaction: Interaction, button: ui.Button):
         """Restart generation with the same payload"""
         result = await self.cog.diy_interaction_check(interaction)
@@ -121,7 +123,7 @@ class AcceptRetryDeleteButtons(ui.View):
         new_task_id = uuid.uuid4().hex
         await self.cog.retry_task(self.ctx, new_task_id, self.payload, self.message, self)
 
-    @ui.button(label="Delete", style=discord.ButtonStyle.red)
+    @ui.button(label="Delete", style=ButtonStyle.red)
     async def delete(self, interaction: Interaction, button: ui.Button):
         """Delete the message"""
         await interaction.message.delete()
