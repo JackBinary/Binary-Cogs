@@ -1,13 +1,80 @@
-import base64
-from io import BytesIO
 import uuid
+import base64
 import requests
+import threading
+from time import sleep
+from io import BytesIO
 from discord import File
 from redbot.core import commands
 from redbot.core.config import Config
+import asyncio
 
+class ImageGenerator:
+    def __init__(self):
+        self.api_url = "http://127.0.0.1:7860"
+        self.txt2img = "sdapi/v1/txt2img"
+        self.progress = "/internal/progress"
+        self.tasks = []
+        self.in_progress = []
+        self.images = {}
+        generator_thread = threading.Thread(target=generator)
+        progress_thread = threading.Thread(target=get_progress)
+        generator_thread.start()
+        progress_thread.start()
+
+    def set_url(self, url):
+        self.api_url = url
+
+    def new_task(self, task_id, payload):
+        self.tasks.append({"id":task_id,"payload":payload})
+        
+    def callback(self, task_id):
+        if task_id in images:
+            return images[task_id]
+        else:
+            return False
+
+    def generator(self):
+        while True:
+            if len(self.tasks) >= 1:
+                task = self.tasks.pop(0)
+                task_id = task["id"]
+                payload = task["payload"]
+                self.in_progress.append(task_id)
+
+                # Generate image
+                response = requests.post(f"{self.api_url}/{self.txt2img}", json=payload, timeout=60)
+                response.raise_for_status()
+                response_json = response.json()
+                if 'images' in response_json:
+                    self.in_progress.remove(task_id)
+                    image_data = base64.b64decode(response_json['images'][0])
+                    image = BytesIO(image_data)
+                    image.seek(0)
+                    self.images[task_id] = {"image":True,"data":image,"complete":True}
+            sleep(1)
+
+    def get_progress(self, in_progress):
+        while True:
+            for task_id in self.in_progress:
+                payload = {
+                    "id_task": task_id,
+                    "id_live_preview": -1,
+                    "live_preview": true
+                }
+                response = requests.post(f"{self.api_url}/{self.progress}", json=payload, timeout=60)
+                response.raise_for_status()
+                response_json = response.json()
+                if 'images' in response_json:
+                    image_data = base64.b64decode(response_json['images'][0])
+                    image = BytesIO(image_data)
+                    image.seek(0)
+                    self.images[task_id] = {"image":True,"data":image,"complete":False}
+                
+            sleep(1)
+        
 class ImageGen(commands.Cog):
-    """Cog for generating images using Stable Diffusion WebUI API"""
+    """Cog for generating images using Stable Diffusion WebUI API with ImageGenerator."""
 
     def __init__(self, bot):
         self.bot = bot
@@ -16,10 +83,16 @@ class ImageGen(commands.Cog):
         default_global = {"api_url": "http://127.0.0.1:7860"}
         self.config.register_global(**default_global)
 
+        # Initialize ImageGenerator
+        api_url = self.bot.loop.run_until_complete(self.config.api_url())
+        self.image_generator = ImageGenerator()
+        self.image_generator.set_url(api_url)
+
     @commands.command()
     async def setapiurl(self, ctx, url: str):
         """Sets the API URL for the Stable Diffusion WebUI."""
         await self.config.api_url.set(url)
+        self.image_generator.set_url(url)  # Update the ImageGenerator's URL
         await ctx.reply(f"API URL has been set to: {url}", mention_author=True)
 
     @commands.command()
@@ -30,20 +103,15 @@ class ImageGen(commands.Cog):
 
     @commands.command(name="draw")
     async def draw(self, ctx, *, text: str):
-        """
-        Generate images in Discord with txt2img followed by img2img for upscaling!
-        """
+        """Generate images with the Stable Diffusion WebUI."""
         task_id = uuid.uuid4().hex
         tokens = [token.strip() for token in text.split(",")]
         positive_prompt = []
         negative_prompt = []
-        # Default to portrait (both initial and upscaled resolutions)
+        # Default to portrait dimensions
         width, height = 832, 1216
-        upscale_width, upscale_height = 1080, 1576
         seed = -1  # default to random
         strength = 0.5
-
-        print(task_id,text)
 
         for token in tokens:
             if "=" in token:
@@ -51,11 +119,11 @@ class ImageGen(commands.Cog):
                 key, value = key.strip(), value.strip()
                 if key == "aspect":
                     if value == "portrait":
-                        width, height, upscale_width, upscale_height = 832, 1216, 1080, 1576
+                        width, height = 832, 1216
                     elif value == "square":
-                        width, height, upscale_width, upscale_height = 1024, 1024, 1328, 1328
+                        width, height = 1024, 1024
                     elif value == "landscape":
-                        width, height, upscale_width, upscale_height = 1216, 832, 1576, 1080
+                        width, height = 1216, 832
                 if key == "seed":
                     seed = int(value)
                 if key == "strength":
@@ -77,61 +145,31 @@ class ImageGen(commands.Cog):
             "hr_second_pass_steps": 8,
             "hr_upscaler": "Latent",
             "prompt": positive_prompt,
-            "hr_prompt": positive_prompt,
             "negative_prompt": negative_prompt,
-            "hr_negative_prompt": negative_prompt,
             "seed": seed,
             "steps": 8,
             "width": width,
             "height": height,
             "cfg_scale": 2.5,
             "sampler_name": "Euler a",
-            "scheduler": "SGM Uniform",
             "batch_size": 1,
-            "n_iter": 1,
-            "force_task_id": task_id
+            "n_iter": 1
         }
 
-        # Use typing indicator while generating image
+        # Add the task to the ImageGenerator queue
+        self.image_generator.new_task(task_id, payload)
+
+        # Inform the user that the task has been submitted
+        await ctx.reply(f"Image generation task submitted. Task ID: {task_id}", mention_author=True)
+
+        # Wait for the image generation result and fetch it
         async with ctx.typing():
-            image = await self.generate_image(ctx, payload, 'sdapi/v1/txt2img')
+            while True:
+                result = self.image_generator.callback(task_id)
+                if result and result["complete"]:
+                    image_data = result["data"]
+                    break
+                await asyncio.sleep(1)  # Poll every second
 
-        # Check if the image is None
-        if image is None:
-            await ctx.reply("Failed to generate the image. Please check the API and try again.", mention_author=True)
-            return
-
-        # send the image
-        await ctx.reply(file=File(fp=image, filename=f"{task_id}.png"), mention_author=True)
-
-    async def generate_image(self, ctx, payload, endpoint):
-        """Helper function to send payload to the Stable Diffusion API and return the generated image."""
-        try:
-            # Get the API URL from the config
-            api_url = await self.config.api_url()
-
-            # Set a timeout for the API request
-            response = requests.post(f"{api_url}/{endpoint}", json=payload, timeout=30)  # Set timeout to 30 seconds
-            response.raise_for_status()
-
-            # Parse response JSON
-            response_json = response.json()
-
-            # Check if images are in the response
-            if 'images' not in response_json or not response_json['images']:
-                await ctx.reply("No images found in the API response.")
-                return None
-
-            # Decode the base64-encoded image and return it as a BytesIO object
-            image_data = base64.b64decode(response_json['images'][0])
-            image = BytesIO(image_data)
-            image.seek(0)
-            return image
-
-        except requests.exceptions.Timeout:
-            await ctx.reply("The request to the API timed out. Please try again later.", mention_author=True)
-            return None
-
-        except Exception as e:
-            await ctx.reply(f"An error occurred while generating the image: {str(e)}", mention_author=True)
-            return None
+        # Send the final image to the user
+        await ctx.reply(file=File(fp=image_data, filename=f"{task_id}.png"), mention_author=True)
