@@ -165,7 +165,6 @@ class ImageGen(commands.Cog):
             response = requests.post(f"{api_url}/internal/progress", json=progress_payload, timeout=10)
             response.raise_for_status()
 
-            print(f"Live preview response: {response.json()}")
             return response.json()
 
         except Exception as e:
@@ -186,7 +185,6 @@ class ImageGen(commands.Cog):
 
             # Parse response JSON
             response_json = response.json()
-            print(f"Image generation response: {response_json}")
 
             # Check if images are in the response
             if 'images' not in response_json or not response_json['images']:
