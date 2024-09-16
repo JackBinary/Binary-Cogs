@@ -164,7 +164,7 @@ class ImageGen(commands.Cog):
         }
 
         # Add the task to the ImageGenerator queue
-        print("Submitting Task!")
+        print(task_id,text)
         self.image_generator.new_task(task_id, payload)
 
         # Inform the user that the task has been submitted
