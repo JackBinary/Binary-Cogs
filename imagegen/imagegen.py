@@ -140,7 +140,7 @@ class AcceptRetryDeleteButtons(ui.View):
     async def on_timeout(self):
         """Default action after timeout: Accept."""
         self.clear_items()
-        await self.message.edit(content="Accepted by default (timeout).", view=None)
+        await self.message.edit(content="", view=None)
 
 class ImageGen(commands.Cog):
     """Cog for generating images using Stable Diffusion WebUI API with ImageGenerator."""
