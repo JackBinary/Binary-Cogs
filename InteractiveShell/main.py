@@ -9,7 +9,7 @@ from datetime import datetime
 try:
     import paramiko
     HAS_PARAMIKO = True
-except ImportError:
+except (ImportError, ModuleNotFoundError):
     HAS_PARAMIKO = False
 
 class InteractiveShell(commands.Cog):
