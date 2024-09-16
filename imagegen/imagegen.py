@@ -109,6 +109,7 @@ class ImageGen(commands.Cog):
             # Set a timeout for the API request
             response = requests.post(f"{api_url}/{endpoint}", json=payload, timeout=30)  # Set timeout to 30 seconds
             response.raise_for_status()
+            print(response)
 
             # Parse response JSON
             response_json = response.json()
