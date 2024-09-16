@@ -143,7 +143,7 @@ class ImageGen(commands.Cog):
         
         try:
             while True:
-                asyncio.sleep(0.5)
+                await asyncio.sleep(0.5)
                 # Poll the live preview endpoint
                 progress_data = await self.get_live_preview(ctx, task_id)
     
