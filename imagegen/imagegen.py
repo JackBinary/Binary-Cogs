@@ -107,50 +107,55 @@ class ImageGen(commands.Cog):
         print("Payload created")
         print(payload)
 
-        # Use typing indicator while generating image
+        # Start both image generation and live preview fetching concurrently
         async with ctx.typing():
             print("Typing started")
             message = await ctx.reply("Generating image...", mention_author=True)
             print("Message sent: Generating image...")
 
-            # Start the image generation in the background
-            image_task = asyncio.create_task(self.generate_image(ctx, payload, 'sdapi/v1/txt2img'))
+            # Start image generation and live preview loop concurrently
+            generate_image_task = asyncio.create_task(self.generate_image(ctx, payload, 'sdapi/v1/txt2img'))
+            live_preview_task = asyncio.create_task(self.live_preview_loop(ctx, message, task_id))
 
-            live_preview = None
-            print("Entering the in-progress loop")
-            while not image_task.done():
-                print("Waiting for image generation progress")
-                await asyncio.sleep(0.5)
-                progress_data = await self.get_live_preview(ctx, task_id)
-                print(f"Progress data: {progress_data}")
-                if progress_data and progress_data.get('active'):
-                    try:
-                        new_live_preview = progress_data['live_preview'].split(",")[1]
-                        print(f"Live preview data: {new_live_preview}")
-                    except (AttributeError, IndexError):
-                        print("Error parsing live preview data")
-                        continue
+            # Wait for image generation to complete
+            print("Waiting for image generation to complete")
+            final_image = await generate_image_task
+            await live_preview_task  # Ensure live preview task also completes
+
+            if final_image is None:
+                print("Image generation failed")
+                await ctx.reply("Failed to generate the image. Please check the API and try again.", mention_author=True)
+                return
+
+            print("Sending final image")
+            await message.edit(content=None, attachments=[File(fp=final_image, filename=f"{task_id}.png")])
+
+    async def live_preview_loop(self, ctx, message, task_id):
+        """Loop for fetching live preview while image generation is in progress."""
+        print("Entering live preview loop")
+        live_preview = None
+        while True:
+            print("Fetching live preview")
+            progress_data = await self.get_live_preview(ctx, task_id)
+            print(f"Progress data: {progress_data}")
+
+            if progress_data and progress_data.get('completed'):
+                print("Image generation completed, exiting preview loop")
+                break
+
+            if progress_data and progress_data.get('live_preview'):
+                try:
+                    new_live_preview = progress_data['live_preview'].split(",")[1]
                     if new_live_preview != live_preview:
                         live_preview = new_live_preview
                         preview_image = BytesIO(base64.b64decode(live_preview))
                         preview_image.seek(0)
                         print(f"Sending live preview update: {task_id}_preview.png")
                         await message.edit(attachments=[File(fp=preview_image, filename=f"{task_id}_preview.png")])
+                except (AttributeError, IndexError):
+                    print("Error parsing live preview data")
 
-            print("Image generation completed")
-
-            # Wait for the final image
-            image = await image_task
-
-        # Check if the image is None
-        if image is None:
-            print("Image generation failed")
-            await ctx.reply("Failed to generate the image. Please check the API and try again.", mention_author=True)
-            return
-
-        # Send the final image
-        print("Sending final image")
-        await message.edit(content=None, attachments=[File(fp=image, filename=f"{task_id}.png")])
+            await asyncio.sleep(0.5)  # Avoid spamming the API too fast
 
     async def get_live_preview(self, ctx, task_id):
         """Helper function to send the request for live preview."""
@@ -164,7 +169,6 @@ class ImageGen(commands.Cog):
             }
             response = requests.post(f"{api_url}/internal/progress", json=progress_payload, timeout=10)
             response.raise_for_status()
-
             return response.json()
 
         except Exception as e:
@@ -176,11 +180,8 @@ class ImageGen(commands.Cog):
         """Helper function to send payload to the Stable Diffusion API and return the generated image."""
         try:
             print("Generating image")
-            # Get the API URL from the config
             api_url = await self.config.api_url()
-
-            # Set a timeout for the API request
-            response = requests.post(f"{api_url}/{endpoint}", json=payload, timeout=30)  # Set timeout to 30 seconds
+            response = requests.post(f"{api_url}/{endpoint}", json=payload, timeout=30)
             response.raise_for_status()
 
             # Parse response JSON
