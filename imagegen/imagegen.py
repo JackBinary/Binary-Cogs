@@ -114,8 +114,9 @@ class ImageGen(commands.Cog):
         tokens = [token.strip() for token in text.split(",")]
         positive_prompt = []
         negative_prompt = []
-        # Default to portrait dimensions
+        # Default to portrait dimensions and final resized resolution
         width, height = 832, 1216
+        final_width, final_height = 1080, 1576
         seed = -1  # default to random
         strength = 0.5
 
@@ -126,10 +127,13 @@ class ImageGen(commands.Cog):
                 if key == "aspect":
                     if value == "portrait":
                         width, height = 832, 1216
+                        final_width, final_height = 1080, 1576
                     elif value == "square":
                         width, height = 1024, 1024
+                        final_width, final_height = 1328, 1328
                     elif value == "landscape":
                         width, height = 1216, 832
+                        final_width, final_height = 1576, 1080
                 if key == "seed":
                     seed = int(value)
                 if key == "strength":
@@ -160,17 +164,17 @@ class ImageGen(commands.Cog):
             "sampler_name": "Euler a",
             "batch_size": 1,
             "n_iter": 1,
-            "force_task_id":task_id
+            "force_task_id": task_id
         }
 
         # Add the task to the ImageGenerator queue
-        print(task_id,text)
+        print(task_id, text)
         self.image_generator.new_task(task_id, payload)
 
         # Inform the user that the task has been submitted
         message = await ctx.reply(f"Generating...", mention_author=True)
 
-       # Wait for the image generation result and fetch it
+        # Wait for the image generation result and fetch it
         async with ctx.typing():
             base64_image = None  # to track the last image's base64 string
             while True:
@@ -183,17 +187,22 @@ class ImageGen(commands.Cog):
                         image_data = base64.b64decode(base64_image)
                         image = BytesIO(image_data)
                         image.seek(0)
-                        await message.edit(attachments=[File(fp=image, filename=f"{task_id}.png")])
+
+                        # Resize the image to the final dimensions
+                        with Image.open(image) as img:
+                            img = img.resize((final_width, final_height), Image.ANTIALIAS)
+                            buffer = BytesIO()
+                            img.save(buffer, format="PNG")
+                            buffer.seek(0)
+
+                        # Send the resized preview image
+                        await message.edit(attachments=[File(fp=buffer, filename=f"{task_id}.png")])
     
                     if result["complete"]:
                         break
     
                 await asyncio.sleep(1)  # Poll every second
-            result = self.image_generator.callback(task_id)
-            base64_image = current_image_base64
-            # Decode the base64 string only when sending the image
-            image_data = base64.b64decode(base64_image)
-            image = BytesIO(image_data)
-            image.seek(0)
-        await message.edit(content="Done!",attachments=[File(fp=image, filename=f"{task_id}.png")])
-        self.image_generator.remove_task(task_id)
+
+            # Final cleanup after the image is complete
+            self.image_generator.remove_task(task_id)
+        await message.edit(content="Done!")
