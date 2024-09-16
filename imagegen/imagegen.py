@@ -65,9 +65,12 @@ class ImageGenerator:
                 response = requests.post(f"{self.api_url}/{self.progress}", json=payload, timeout=60)
                 response.raise_for_status()
                 response_json = response.json()
-                if 'images' in response_json:
-                    image_base64 = response_json['images'][0]
-                    self.images[task_id] = {"image": image_base64, "complete": False}
+                if 'live_preview' in response_json:
+                    try:
+                        image_base64 = response_json['live_preview'].split(",")[1]
+                        self.images[task_id] = {"image": image_base64, "complete": False}
+                    except AttributeError:
+                        pass
             sleep(1)
 
 class ImageGen(commands.Cog):
@@ -185,4 +188,4 @@ class ImageGen(commands.Cog):
                         break
     
                 await asyncio.sleep(1)  # Poll every second
-        await message.edit(content="Done!",attachments=[File(fp=image, filename=f"{task_id}.png")])
+        await message.edit(content="Done!")
