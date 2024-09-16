@@ -74,7 +74,7 @@ class ImageGenerator:
         self.worker_thread.join()
 
 
-class ImageGenCog(commands.Cog):
+class ImageGen(commands.Cog):
     """Cog for generating images using ImageGenerator in a separate thread."""
     
     def __init__(self, bot):
