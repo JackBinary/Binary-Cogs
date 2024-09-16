@@ -155,19 +155,22 @@ class ImageGen(commands.Cog):
         }
 
         # Add the task to the ImageGenerator queue
+        print("Submitting Task!)
         self.image_generator.new_task(task_id, payload)
 
         # Inform the user that the task has been submitted
-        message = await ctx.reply(f"Image generation task submitted. Task ID: {task_id}", mention_author=True)
+        message = await ctx.reply(f"Generating...", mention_author=True)
 
        # Wait for the image generation result and fetch it
         async with ctx.typing():
             base64_image = None  # to track the last image's base64 string
             while True:
+                print("Checking Result...")
                 result = self.image_generator.callback(task_id)
                 if result:
                     current_image_base64 = result["image"]
                     if current_image_base64 != base64_image:  # Check if new image base64 string exists
+                        print("New Result!")
                         base64_image = current_image_base64
                         # Decode the base64 string only when sending the image
                         image_data = base64.b64decode(base64_image)
@@ -179,3 +182,4 @@ class ImageGen(commands.Cog):
                         break
     
                 await asyncio.sleep(1)  # Poll every second
+        await message.edit(content="Done!",attachments=[File(fp=image, filename=f"{task_id}.png")])
