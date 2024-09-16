@@ -97,8 +97,8 @@ class ImageGen(commands.Cog):
             await ctx.reply("Failed to generate the image. Please check the API and try again.", mention_author=True)
             return
 
-        # Attach the first image to the original reply
-        await ctx.reply(attachments=[File(fp=image, filename=f"{uuid.uuid4().hex}.png")])
+        # send the image
+        await ctx.reply(file=File(fp=image, filename=f"{uuid.uuid4().hex}.png"), mention_author=True)
 
     async def generate_image(self, ctx, payload, endpoint):
         """Helper function to send payload to the Stable Diffusion API and return the generated image."""
