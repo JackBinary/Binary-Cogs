@@ -271,13 +271,14 @@ class ImageGen(commands.Cog):
 
         # Add interactive buttons for "Accept", "Try Again", and "Delete"
         view = AcceptRetryDeleteButtons(self, ctx, task_id, payload, message)
-        await message.edit(view=view)
+        await message.edit(content="Done!", view=view)
 
     async def retry_task(self, ctx, new_task_id, payload, message, view):
         """Handles retrying the image generation with the same payload."""
+        
         payload["force_task_id"] = new_task_id  # Set the new task ID for retry
         self.image_generator.new_task(new_task_id, payload)
-
+        await message.edit(content="Generating...")
         # Wait for the new image to be generated
         base64_image = None  # to track the last image's base64 string
         while True:
