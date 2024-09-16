@@ -5,9 +5,7 @@ import threading
 from time import sleep
 from io import BytesIO
 from PIL import Image
-from discord import File, ButtonStyle, Interaction
-from discord.ext import commands
-import discord.ui as ui
+from discord import File, ButtonStyle, ui, Interaction
 from redbot.core import commands
 from redbot.core.config import Config
 import asyncio
@@ -80,8 +78,8 @@ class ImageGenerator:
             del self.images[task_id]
 
 class AcceptRetryDeleteButtons(ui.View):
-    LABEL_DRAWING = "Drawing..."
     LABEL_TRY_AGAIN = "Try Again"
+    LABEL_DRAWING = "Drawing..."
 
     def __init__(self, cog, ctx, task_id, payload, message, timeout=60):
         super().__init__(timeout=timeout)
@@ -91,42 +89,58 @@ class AcceptRetryDeleteButtons(ui.View):
         self.payload = payload
         self.message = message
 
-    async def interaction_check(self, interaction: Interaction):
-        # Optional: If you want to restrict interaction to the message author only
-        return interaction.user == self.ctx.author
-
-    async def on_timeout(self):
-        """Handle the default action after timeout (Accept button)"""
-        await self.message.edit(content="Accepted by default (timeout)", view=None)
+    async def interaction_check(self, interaction: Interaction) -> bool:
+        # Ensure only the original message author can interact with the buttons
+        if interaction.user == self.ctx.author:
+            return True
+        await interaction.response.send_message("You are not allowed to interact with these buttons.", ephemeral=True)
+        return False
 
     @ui.button(label="Accept", style=ButtonStyle.green)
     async def accept(self, interaction: Interaction, button: ui.Button):
-        """Remove buttons, leave the image as is"""
-        await interaction.response.edit_message(view=None)  # Removes the buttons
+        """Accept the generated image."""
+        # Disable the buttons and update the message
+        self.clear_items()
+        await interaction.response.edit_message(content="Accepted!", view=self)
 
-    @ui.button(label="Try Again", style=ButtonStyle.blurple)
+        # Cancel the timeout since we've accepted
+        self.stop()
+
+    @ui.button(label="Try Again", style=ButtonStyle.primary)
     async def try_again(self, interaction: Interaction, button: ui.Button):
-        """Restart generation with the same payload"""
-        result = await self.cog.diy_interaction_check(interaction)
+        """Restart generation with the same payload."""
+        result = await self.interaction_check(interaction)
         if not result:
             return
-    
-        # Disable all buttons and update the "Try Again" label
-        self.children[0].disabled = True  # Disable Accept
-        self.children[1].label = self.LABEL_DRAWING
-        self.children[1].disabled = True  # Disable Try Again
-        self.children[2].disabled = True  # Disable Delete
-    
+
+        # Update the button to show "Drawing..." and disable all buttons
+        button.label = self.LABEL_DRAWING
+        for child in self.children:
+            child.disabled = True
+
         await interaction.response.edit_message(view=self)
-    
+
         # Create a new task ID and retry image generation
         new_task_id = uuid.uuid4().hex
         await self.cog.retry_task(self.ctx, new_task_id, self.payload, self.message, self)
 
-    @ui.button(label="Delete", style=ButtonStyle.red)
+    @ui.button(label="Delete", style=ButtonStyle.danger)
     async def delete(self, interaction: Interaction, button: ui.Button):
-        """Delete the message"""
+        """Delete the message."""
+        result = await self.interaction_check(interaction)
+        if not result:
+            return
+
+        # Delete the message
         await interaction.message.delete()
+
+        # Cancel the timeout since we deleted the message
+        self.stop()
+
+    async def on_timeout(self):
+        """Default action after timeout: Accept."""
+        self.clear_items()
+        await self.message.edit(content="Accepted by default (timeout).", view=None)
 
 class ImageGen(commands.Cog):
     """Cog for generating images using Stable Diffusion WebUI API with ImageGenerator."""
@@ -220,13 +234,11 @@ class ImageGen(commands.Cog):
         }
 
         # Add the task to the ImageGenerator queue
+        print(task_id, text)
         self.image_generator.new_task(task_id, payload)
 
         # Inform the user that the task has been submitted
         message = await ctx.reply(f"Generating...", mention_author=True)
-
-        # Add buttons to the message with a 60-second timeout
-        buttons = AcceptRetryDeleteButtons(self, ctx, task_id, payload, message, timeout=60)
 
         # Wait for the image generation result and fetch it
         async with ctx.typing():
@@ -250,21 +262,23 @@ class ImageGen(commands.Cog):
                             buffer.seek(0)
 
                         # Send the resized preview image
-                        await message.edit(attachments=[File(fp=buffer, filename=f"{task_id}.png")], view=buttons)
-
+                        await message.edit(attachments=[File(fp=buffer, filename=f"{task_id}.png")])
+    
                     if result["complete"]:
                         break
-
+    
                 await asyncio.sleep(1)  # Poll every second
 
-            # Final cleanup after the image is complete
-            self.image_generator.remove_task(task_id)
-        await message.edit(content="Done!", view=buttons)
+        # Add interactive buttons for "Accept", "Try Again", and "Delete"
+        view = AcceptRetryDeleteButtons(self, ctx, task_id, payload, message)
+        await message.edit(view=view)
 
     async def retry_task(self, ctx, new_task_id, payload, message, view):
-        """Handle retrying the image generation task with live preview."""
+        """Handles retrying the image generation with the same payload."""
+        payload["force_task_id"] = new_task_id  # Set the new task ID for retry
         self.image_generator.new_task(new_task_id, payload)
 
+        # Wait for the new image to be generated
         base64_image = None  # to track the last image's base64 string
         while True:
             result = self.image_generator.callback(new_task_id)
@@ -272,31 +286,29 @@ class ImageGen(commands.Cog):
                 current_image_base64 = result["image"]
                 if current_image_base64 != base64_image:  # Check if new image base64 string exists
                     base64_image = current_image_base64
+                    # Decode the base64 string only when sending the image
                     image_data = base64.b64decode(base64_image)
                     image = BytesIO(image_data)
                     image.seek(0)
 
                     # Resize the image to the final dimensions
                     with Image.open(image) as img:
-                        img = img.resize((final_width, final_height), Image.Resampling.LANCZOS)
+                        img = img.resize((1080, 1576), Image.Resampling.LANCZOS)  # Use portrait dimensions for simplicity
                         buffer = BytesIO()
                         img.save(buffer, format="PNG")
                         buffer.seek(0)
 
-                    # Update the image preview
-                    await message.edit(attachments=[File(fp=buffer, filename=f"{new_task_id}.png")], view=view)
+                    # Send the resized preview image
+                    await message.edit(attachments=[File(fp=buffer, filename=f"{new_task_id}.png")])
 
                 if result["complete"]:
                     break
-            await asyncio.sleep(1)
 
-        self.image_generator.remove_task(new_task_id)
-        await message.edit(content="Done!", view=view)
+            await asyncio.sleep(1)  # Poll every second
 
-    async def diy_interaction_check(self, interaction: Interaction):
-        """Custom interaction check to validate user permissions."""
-        # Only allow the author of the original message to use the buttons
-        if interaction.user == interaction.message.author:
-            return True
-        await interaction.response.send_message("You are not allowed to interact with these buttons.", ephemeral=True)
-        return False
+        # Re-enable the buttons after retry
+        view.children[1].label = view.LABEL_TRY_AGAIN
+        for child in view.children:
+            child.disabled = False
+
+        await message.edit(view=view)
