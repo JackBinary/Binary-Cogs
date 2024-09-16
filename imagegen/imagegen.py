@@ -106,8 +106,8 @@ class ImageGen(commands.Cog):
             # Get the API URL from the config
             api_url = await self.config.api_url()
 
-            # Sending request to the API
-            response = requests.post(f"{api_url}/{endpoint}", json=payload)
+            # Set a timeout for the API request
+            response = requests.post(f"{api_url}/{endpoint}", json=payload, timeout=30)  # Set timeout to 30 seconds
             response.raise_for_status()
 
             # Parse response JSON
@@ -123,6 +123,10 @@ class ImageGen(commands.Cog):
             image = BytesIO(image_data)
             image.seek(0)
             return image
+
+        except requests.exceptions.Timeout:
+            await ctx.reply("The request to the API timed out. Please try again later.", mention_author=True)
+            return None
 
         except Exception as e:
             await ctx.reply(f"An error occurred while generating the image: {str(e)}", mention_author=True)
