@@ -12,331 +12,125 @@ from redbot.core.config import Config
 
 
 class ImageGen(commands.Cog):
-    """
-    Generate images in Discord!
-    """
+    """Cog for generating images using Stable Diffusion WebUI API"""
 
-    def __init__(self, bot: Red) -> None:
+    def __init__(self, bot):
         self.bot = bot
-        self.config = Config.get_conf(
-            self,
-            identifier=133041100356059137,
-            force_registration=True,
-        )
-        self.config_dir = ".imagegen"
-        self.default_negative = "source_furry, source_pony, cartoon, 3d, realistic, monochrome, text, watermark, censored"
-        self.default_positive = "score_9, score_8_up, score_7_up, score_6_up, source_anime"
+        # Initialize Config with default settings
+        self.config = Config.get_conf(self, identifier=1234567890, force_registration=True)
+        default_global = {"api_url": "http://127.0.0.1:7860"}
+        self.config.register_global(**default_global)
 
-    def get_channel_config_path(self, channel_id):
-        return os.path.join(self.config_dir, f"{channel_id}.json")
+    @commands.command()
+    async def setapiurl(self, ctx, url: str):
+        """Sets the API URL for the Stable Diffusion WebUI."""
+        await self.config.api_url.set(url)
+        await ctx.reply(f"API URL has been set to: {url}", mention_author=True)
 
-    def load_channel_config(self, channel_id):
-        config_path = self.get_channel_config_path(channel_id)
-        if os.path.exists(config_path):
-            with open(config_path, "r") as file:
-                return json.load(file)
-        return {"positive": "<lora:Fizintine_Style:0.6> <lora:JdotKdot_PDXL-v1:0.7>", "negative": ""}
-
-    def save_channel_config(self, channel_id, config):
-        config_path = self.get_channel_config_path(channel_id)
-        with open(config_path, "w") as file:
-            json.dump(config, file, indent=4)
-
-    async def generate_image(self, ctx, payload, endpoint):
-        async with ctx.typing():
-            response = requests.post(url=f"http://192.168.1.177:7860/{endpoint}", json=payload).json()
-            image = BytesIO(base64.b64decode(response['images'][0]))
-            image.seek(0)
-        return image
+    @commands.command()
+    async def getapiurl(self, ctx):
+        """Gets the current API URL."""
+        api_url = await self.config.api_url()
+        await ctx.reply(f"The current API URL is: {api_url}", mention_author=True)
 
     @commands.command(name="draw")
-    async def draw(self, ctx, *, text: str):
-        """
-        Generate images in Discord!
-        """
-        tokens = [token.strip() for token in text.split(",")]
-        positive_prompt = []
-        negative_prompt = []
-        width, height = 832, 1248  # Default to portrait
-        seed = -1  # default to random
-        strength = 0.5
+async def draw(self, ctx, *, text: str):
+    """
+    Generate images in Discord with txt2img followed by img2img for upscaling!
+    """
+    tokens = [token.strip() for token in text.split(",")]
+    positive_prompt = []
+    negative_prompt = []
+    # Default to portrait (both initial and upscaled resolutions)
+    width, height = 832, 1216
+    upscale_width, upscale_height = 1080, 1576
+    seed = -1  # default to random
+    strength = 0.5
 
-        for token in tokens:
-            if "=" in token:
-                key, value = token.split("=", 1)
-                key, value = key.strip(), value.strip()
-                if key == "ratio":
-                    if value == "portrait":
-                        width, height = 832, 1248
-                    elif value == "square":
-                        width, height = 1024, 1024
-                    elif value == "landscape":
-                        width, height = 1248, 832
-                if key == "seed":
-                    seed = int(value)
-                if key == "strength":
-                    if value == "1":
-                        strength = 0.2
-                    elif value == "2":
-                        strength = 0.4
-                    elif value == "3":
-                        strength = 0.5
-                    elif value == "4":
-                        strength = 0.6
-                    elif value == "5":
-                        strength = 0.7
-            elif token.startswith("-"):
-                negative_prompt.append(token.lstrip("-").strip())
-            else:
-                positive_prompt.append(token)
-
-        channel_config = self.load_channel_config(ctx.channel.id)
-        positive_prompt = f"{self.default_positive}, {channel_config['positive']}, {', '.join(positive_prompt)}"
-        negative_prompt = f"{self.default_negative}, {channel_config['negative']}, {', '.join(negative_prompt)}"
-
-        if ctx.message.attachments:
-            attachment = BytesIO()
-            await ctx.message.attachments[0].save(attachment)
-            attachment.seek(0)
-            init_image = base64.b64encode(attachment.getvalue()).decode("utf-8")
-
-            payload = {
-                "prompt": positive_prompt,
-                "negative_prompt": negative_prompt,
-                "seed": seed,
-                "steps": 8,
-                "width": width,
-                "height": height,
-                "cfg_scale": 2,
-                "sampler_name": "DPM++ 2M SDE",
-                "scheduler": "SGM Uniform",
-                "n_iter": 1,
-                "batch_size": 1,
-                "init_images": [init_image],
-                "denoising_strength": strength
-            }
-            endpoint = 'sdapi/v1/img2img'
-
+    for token in tokens:
+        if "=" in token:
+            key, value = token.split("=", 1)
+            key, value = key.strip(), value.strip()
+            if key == "aspect":
+                if value == "portrait":
+                    width, height, upscale_width, upscale_height = 832, 1216, 1080, 1576
+                elif value == "square":
+                    width, height, upscale_width, upscale_height = 1024, 1024, 1328, 1328
+                elif value == "landscape":
+                    width, height, upscale_width, upscale_height = 1216, 832, 1576, 1080
+            if key == "seed":
+                seed = int(value)
+            if key == "strength":
+                strength = float(value)
+        elif token.startswith("-"):
+            negative_prompt.append(token.lstrip("-").strip())
         else:
-            payload = {
-                "prompt": positive_prompt,
-                "negative_prompt": negative_prompt,
-                "seed": seed,
-                "steps": 8,
-                "width": width,
-                "height": height,
-                "cfg_scale": 2,
-                "sampler_name": "DPM++ 2M SDE",
-                "scheduler": "SGM Uniform",
-                "n_iter": 1,
-                "batch_size": 1,
-            }
-            endpoint = 'sdapi/v1/txt2img'
+            positive_prompt.append(token)
 
-        image = await self.generate_image(ctx, payload, endpoint)
+    positive_prompt = ', '.join(positive_prompt)
+    negative_prompt = ', '.join(negative_prompt)
 
-        view = ImageGenView(self, ctx, payload, endpoint, ctx.author.id, ctx.author.name)
-        message = await ctx.send(file=discord.File(fp=image, filename=f"{uuid.uuid4().hex}.png"), view=view)
-        view.set_image_message(message)
+    # First Image (txt2img)
+    payload = {
+        "prompt": positive_prompt,
+        "negative_prompt": negative_prompt,
+        "seed": seed,
+        "steps": 8,
+        "width": width,
+        "height": height,
+        "cfg_scale": 2.5,
+        "sampler_index": "Euler a",
+        "scheduler": "SGM Uniform",
+    }
 
-    @commands.command(name="drawsplit")
-    async def drawsplit(self, ctx, *, text: str):
-        """
-        Generate images with different prompts for the split regions.
-        """
-        if ";" not in text:
-            await ctx.send("Invalid format! Use 'left_prompt; right_prompt; ...'.")
-            return
-        
-        # Load the channel config
-        channel_config = self.load_channel_config(ctx.channel.id)
-        
-        # Split the input text by ";" and then split each part by ","
-        tokens = [
-            [token.strip() for token in part.split(",")]
-            for part in text.split(";")
-        ]
-    
-        # Initialize the positive and negative prompts lists
-        negative_prompt = [[] for _ in tokens]
-        positive_prompt = [[] for _ in tokens]
-    
-        # Process tokens to categorize them as positive or negative
-        for i, side in enumerate(tokens):
-            for token in side:
-                if token.startswith("-"):
-                    negative_prompt[i].append(token.lstrip("-").strip())
-                else:
-                    positive_prompt[i].append(token.strip())
-                    
-        # Join tokens for each part into strings
-        negative_prompt = [", ".join(parts) for parts in negative_prompt]
-        positive_prompt = [", ".join(parts) for parts in positive_prompt]
-    
-        # Function to half the strength of LoRA tokens
-        def adjust_lora_strength(prompt, splits):
-            lora_pattern = re.compile(r'<lora:(.*?):(.*?)>')
-            def adjust_strength(match):
-                lora_name = match.group(1)
-                strength = float(match.group(2)) / splits
-                return f'<lora:{lora_name}:{strength}>'
-            return lora_pattern.sub(adjust_strength, prompt)
-    
-        # Construct the common positive and negative prompts with adjusted LoRA strengths
-        common_positive_prompt = adjust_lora_strength(f"{self.default_positive}, {channel_config['positive']}", len(positive_prompt))
-        common_negative_prompt = f"{self.default_negative}, {channel_config['negative']}"
-    
-        # Construct the full positive and negative prompts
-        positive_prompt = " BREAK ".join([
-            common_positive_prompt,
-            *positive_prompt
-        ])
-        negative_prompt = " BREAK ".join([
-            common_negative_prompt,
-            *negative_prompt
-        ])
-        
-        # Construct the payload for the API request
-        payload = {
-            "prompt": positive_prompt,
-            "negative_prompt": negative_prompt,
-            "alwayson_scripts": {
-                "Regional Prompter": {
-                    "args": [
-                        True,                            # Enable
-                        False,                           # debug
-                        "Matrix",                        # Mode
-                        "Columns",                       # Split mode
-                        "Mask",                          # Mask mode
-                        "Prompt",                        # Prompt Mode
-                        ",".join(["1"] * len(tokens)),   # Ratios
-                        "0.5",                           # Base Ratios
-                        False,                           # Use Base
-                        True,                            # Use Common
-                        True,                            # Use Neg-Common 	
-                        "Attention",                     # Calcmode
-                        False,                           # Not Change AND
-                        "0",                             # LoRA Textencoder
-                        "0",                             # LoRA U-Net
-                        "0",                             # Threshold
-                        "",                              # Mask
-                        "0",                             # LoRA stop step 	
-                        "0",                             # LoRA Hires stop step 	
-                        False                            # flip
-                    ]
-                }
-            },
-            "steps": 8,
-            "width": 1184,
-            "height": 880,
-            "cfg_scale": 2,
-            "sampler_name": "DPM++ 2M SDE",
-            "scheduler": "SGM Uniform",
-            "n_iter": 1,
-            "batch_size": 1,
-        }
-    
-        endpoint = 'sdapi/v1/txt2img'
-        image = await self.generate_image(ctx, payload, endpoint)
-    
-        view = ImageGenView(self, ctx, payload, endpoint, ctx.author.id, ctx.author.name)
-        message = await ctx.send(file=discord.File(fp=image, filename=f"{uuid.uuid4().hex}.png"), view=view)
-        view.set_image_message(message)
+    api_url = await self.config.api_url()
 
-    @commands.guild_only()
-    @commands.admin_or_permissions(administrator=True)
-    @commands.command(name="drawset")
-    async def drawset(self, ctx, mode: str, *, prompt: str):
-        """
-        Configure the channel positive and negative prompts.
-        Usage: [p]drawset positive <positive prompt>
-               [p]drawset negative <negative prompt>
-        """
-        mode = mode.lower()
-        if mode not in ["positive", "negative"]:
-            await ctx.send("Invalid mode! Use 'positive' or 'negative'.")
-            return
+    # Generate initial txt2img image
+    await ctx.reply(f"Generating initial image...", mention_author=True)
+    image = await self.generate_image(ctx, payload, api_url, 'sdapi/v1/txt2img')
 
-        channel_config = self.load_channel_config(ctx.channel.id)
-        channel_config[mode] = prompt
-        self.save_channel_config(ctx.channel.id, channel_config)
-        await ctx.send(f"{mode.capitalize()} prompt set to: {prompt}")
+    # Send the first image to the user as a reply
+    message = await ctx.reply(file=File(fp=image, filename=f"{uuid.uuid4().hex}.png"))
+
+    # Prepare the image for img2img upscaling
+    image.seek(0)  # Ensure the pointer is at the start of the file
+    init_image_base64 = base64.b64encode(image.getvalue()).decode('utf-8')
+
+    # Prepare img2img payload
+    img2img_payload = {
+        "prompt": positive_prompt,
+        "negative_prompt": negative_prompt,
+        "seed": seed,
+        "steps": 8,
+        "width": upscale_width,
+        "height": upscale_height,
+        "cfg_scale": 2.5,
+        "sampler_index": "Euler a",
+        "scheduler": "SGM Uniform",
+        "init_images": [init_image_base64],
+        "denoising_strength": strength
+    }
+
+    # Generate the upscaled image
+    final_image = await self.generate_image(ctx, img2img_payload, api_url, 'sdapi/v1/img2img')
+
+    # Replace the previous image with the upscaled one
+    await message.edit(attachments=[File(fp=final_image, filename=f"{uuid.uuid4().hex}.png")])
 
 
-class ImageGenView(discord.ui.View):
-    LABEL_ACCEPT = "Accept"
-    LABEL_DELETE = "Delete"
-    LABEL_TRY_AGAIN = "Try Again"
-    LABEL_DRAWING = "Drawing.."
+    async def generate_image(self, ctx, payload, api_url, endpoint):
+        """Helper function to send payload to the Stable Diffusion API and return the generated image."""
+        try:
+            response = requests.post(url=f'{api_url}/{endpoint}', json=payload)
+            r = response.json()
 
-    def __init__(self, cog, ctx, payload, endpoint, requesting_user_id, requesting_user_name):
-        super().__init__(timeout=120.0)
-        self.cog = cog
-        self.ctx = ctx
-        self.payload = payload
-        self.endpoint = endpoint
-        self.requesting_user_id = requesting_user_id
-        self.requesting_user_name = requesting_user_name
-        self.photo_accepted = False
-        self.image_message = None
+            # Decode the image from base64
+            img_data = base64.b64decode(r['images'][0])
+            img = BytesIO(img_data)
+            img.seek(0)
 
-        self.btn_try_again = discord.ui.Button(label=self.LABEL_TRY_AGAIN, style=discord.ButtonStyle.primary, row=1)
-        self.btn_try_again.callback = self.on_try_again
-        self.add_item(self.btn_try_again)
+            return img
 
-        self.btn_accept = discord.ui.Button(label=self.LABEL_ACCEPT, style=discord.ButtonStyle.success, row=1)
-        self.btn_accept.callback = self.on_accept
-        self.add_item(self.btn_accept)
-
-        self.btn_delete = discord.ui.Button(label=self.LABEL_DELETE, style=discord.ButtonStyle.danger, row=1)
-        self.btn_delete.callback = self.on_delete
-        self.add_item(self.btn_delete)
-
-    def set_image_message(self, image_message: discord.Message):
-        self.image_message = image_message
-
-    def get_image_message(self) -> discord.Message:
-        if self.image_message is None:
-            raise ValueError("image_message is None")
-        return self.image_message
-
-    async def on_try_again(self, interaction: discord.Interaction):
-        if interaction.user.id != self.requesting_user_id:
-            await interaction.response.send_message("You are not authorized to use this button.", ephemeral=True)
-            return
-
-        self.btn_try_again.label = self.LABEL_DRAWING
-        self.btn_try_again.disabled = True
-        self.btn_accept.disabled = True
-        self.btn_delete.disabled = True
-
-        await interaction.response.edit_message(view=self)
-        image = await self.cog.generate_image(self.ctx, self.payload, self.endpoint)
-
-        self.btn_try_again.label = self.LABEL_TRY_AGAIN
-        self.btn_try_again.disabled = False
-        self.btn_accept.disabled = False
-        self.btn_delete.disabled = False
-
-        await self.get_image_message().edit(attachments=[discord.File(fp=image, filename=f"{uuid.uuid4().hex}.png")], view=self)
-
-    async def on_accept(self, interaction: discord.Interaction):
-        if interaction.user.id != self.requesting_user_id:
-            await interaction.response.send_message("You are not authorized to use this button.", ephemeral=True)
-            return
-
-        self.photo_accepted = True
-        for item in self.children:
-            item.disabled = True
-        await interaction.response.edit_message(view=None)
-
-    async def on_delete(self, interaction: discord.Interaction):
-        if interaction.user.id != self.requesting_user_id:
-            await interaction.response.send_message("You are not authorized to use this button.", ephemeral=True)
-            return
-
-        await interaction.message.delete()
-
-    async def on_timeout(self):
-        if not self.photo_accepted:
-            await self.get_image_message().delete()
+        except Exception as e:
+            await ctx.reply(f"An error occurred: {str(e)}", mention_author=True)
+            return None
