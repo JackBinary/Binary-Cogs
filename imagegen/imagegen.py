@@ -46,8 +46,6 @@ class ImageGen(commands.Cog):
         seed = -1  # default to random
         strength = 0.5
 
-        print(task_id, text)
-
         for token in tokens:
             if "=" in token:
                 key, value = token.split("=", 1)
@@ -100,8 +98,11 @@ class ImageGen(commands.Cog):
 
     def generate_image_and_track_progress(self, ctx, payload, task_id):
         """Run image generation in a separate thread, poll progress, and send live previews."""
+        # Fetch the API URL in a thread-safe manner
+        api_url = asyncio.run_coroutine_threadsafe(self.config.api_url(), self.bot.loop).result()
+
         # Start image generation
-        image = self.generate_image(ctx, payload, 'sdapi/v1/txt2img')
+        image = self.generate_image(ctx, payload, f'{api_url}/sdapi/v1/txt2img')
 
         # If image generation failed, return
         if image is None:
@@ -112,7 +113,7 @@ class ImageGen(commands.Cog):
             return
 
         # Check for live previews while image is being generated
-        self.poll_progress_and_send_preview(ctx, task_id)
+        self.poll_progress_and_send_preview(ctx, task_id, api_url)
 
         # Once the image is fully generated, send the final image
         asyncio.run_coroutine_threadsafe(
@@ -120,9 +121,8 @@ class ImageGen(commands.Cog):
             self.bot.loop
         )
 
-    def poll_progress_and_send_preview(self, ctx, task_id):
+    def poll_progress_and_send_preview(self, ctx, task_id, api_url):
         """Poll the progress endpoint and send live previews to Discord."""
-        api_url = asyncio.run(self.config.api_url())
         progress_endpoint = f"{api_url}/internal/progress"
 
         while True:
@@ -166,11 +166,8 @@ class ImageGen(commands.Cog):
     def generate_image(self, ctx, payload, endpoint):
         """Helper function to send payload to the Stable Diffusion API and return the generated image."""
         try:
-            # Get the API URL from the config
-            api_url = asyncio.run(self.config.api_url())
-
             # Set a timeout for the API request
-            response = requests.post(f"{api_url}/{endpoint}", json=payload, timeout=30)
+            response = requests.post(endpoint, json=payload, timeout=30)
             response.raise_for_status()
 
             # Parse response JSON
