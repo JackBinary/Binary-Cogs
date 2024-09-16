@@ -174,12 +174,10 @@ class ImageGen(commands.Cog):
         async with ctx.typing():
             base64_image = None  # to track the last image's base64 string
             while True:
-                print("Checking Result...")
                 result = self.image_generator.callback(task_id)
                 if result:
                     current_image_base64 = result["image"]
                     if current_image_base64 != base64_image:  # Check if new image base64 string exists
-                        print("New Result!")
                         base64_image = current_image_base64
                         # Decode the base64 string only when sending the image
                         image_data = base64.b64decode(base64_image)
