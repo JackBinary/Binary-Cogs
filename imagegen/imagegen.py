@@ -85,7 +85,8 @@ class ImageGen(commands.Cog):
             "sampler_name": "Euler a",
             "scheduler": "SGM Uniform",
             "batch_size": 1,
-            "n_iter": 1
+            "n_iter": 1,
+            "force_task_id": "TestTaskID"
         }
 
         # Use typing indicator while generating image
