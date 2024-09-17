@@ -1,0 +1,22 @@
+{
+    "$schema": "https://raw.githubusercontent.com/Cog-Creators/Red-DiscordBot/V3/develop/schema/red_cog.schema.json",
+    "name": "Interrogator",
+    "short": "Get tags from an image!",
+    "description": "Intermediatory for Discord bot and A1111 compatible APIs",
+    "end_user_data_statement": "This cog stores no information about its users.",
+    "install_msg": "Installed!",
+    "author": [
+        "Spaghet"
+    ],
+    "required_cogs": {},
+    "requirements": [],
+    "tags": [
+        "tag1",
+        "tag2",
+        "tag3"
+    ],
+    "min_bot_version": "3.5.0",
+    "hidden": false,
+    "disabled": false,
+    "type": "COG"
+}
