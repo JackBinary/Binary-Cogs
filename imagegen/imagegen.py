@@ -314,3 +314,58 @@ class ImageGen(commands.Cog):
             child.disabled = False
 
         await message.edit(view=view)
+
+    @commands.command(name="tags")
+    async def tags(self, ctx, *, text: str):
+        """Process the attached image, send it to the tagger API, and return sorted tags."""
+        
+        # Check if the user attached an image
+        if len(ctx.message.attachments) == 0:
+            await ctx.reply("Please attach an image to use this command.", mention_author=True)
+            return
+        
+        # Fetch the image from the attachment
+        attachment = ctx.message.attachments[0]
+        if not attachment.content_type.startswith('image/'):
+            await ctx.reply("Please attach a valid image file.", mention_author=True)
+            return
+        
+        # Download the image data
+        image_data = await attachment.read()
+        
+        # Convert the image to base64
+        image_base64 = base64.b64encode(image_data).decode("utf-8")
+        
+        # Prepare the payload for the tagger API
+        payload = {
+            "image": image_base64,
+            "model": "wd-v1-4-moat-tagger.v2",
+            "threshold": 0,
+            "queue": "",
+            "name_in_queue": ""
+        }
+        
+        # Send the request to the tagger API
+        try:
+            response = requests.post("http://127.0.0.1:7860/tagger/v1/interrogate", json=payload, timeout=60)
+            response.raise_for_status()
+        except requests.RequestException as e:
+            await ctx.reply(f"An error occurred while contacting the tagger API: {str(e)}", mention_author=True)
+            return
+        
+        # Parse the JSON response
+        try:
+            data = response.json()
+            tags = data.get("caption", {}).get("tag", {})
+        except (ValueError, KeyError):
+            await ctx.reply("Failed to parse the response from the tagger API.", mention_author=True)
+            return
+        
+        # Sort the tags by score (descending order)
+        sorted_tags = sorted(tags.items(), key=lambda x: x[1], reverse=True)
+        
+        # Generate a comma-separated string of tags
+        tag_string = ", ".join([tag for tag, score in sorted_tags])
+        
+        # Reply with the formatted tags in a code block
+        await ctx.reply(f"```\n{tag_string}\n```", mention_author=True)
