@@ -316,7 +316,7 @@ class ImageGen(commands.Cog):
         await message.edit(view=view)
 
     @commands.command(name="tags")
-    async def tags(self, ctx, *, text: str):
+    async def tags(self, ctx, *):
         """Process the attached image, send it to the tagger API, and return sorted tags."""
         
         # Check if the user attached an image
