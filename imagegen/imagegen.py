@@ -340,7 +340,7 @@ class ImageGen(commands.Cog):
         payload = {
             "image": image_base64,
             "model": "wd-v1-4-moat-tagger.v2",
-            "threshold": 0,
+            "threshold": 0.35,
             "queue": "",
             "name_in_queue": ""
         }
