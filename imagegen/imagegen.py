@@ -366,6 +366,7 @@ class ImageGen(commands.Cog):
         
         # Generate a comma-separated string of tags
         tag_string = ", ".join([tag for tag, score in sorted_tags])
+        print(tag_string)
         
         # Reply with the formatted tags in a code block
         await ctx.reply(f"```\n{tag_string}\n```", mention_author=True)
