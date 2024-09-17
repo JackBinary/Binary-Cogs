@@ -366,7 +366,11 @@ class ImageGen(commands.Cog):
         
         # Generate a comma-separated string of tags
         tag_string = ", ".join([tag for tag, score in sorted_tags])
-        print(tag_string)
+        if len(tag_string) >= 3990:
+            tag_string = tag_string[:3990]
+            last_comma_index = tag_string.rfind(',')
+            if last_comma_index != -1:
+                tag_string = tag_string[:last_comma_index]
         
         # Reply with the formatted tags in a code block
         await ctx.reply(f"```\n{tag_string}\n```", mention_author=True)
