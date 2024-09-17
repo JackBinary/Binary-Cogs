@@ -347,7 +347,7 @@ class ImageGen(commands.Cog):
         
         # Send the request to the tagger API
         try:
-            response = requests.post("http://127.0.0.1:7860/tagger/v1/interrogate", json=payload, timeout=60)
+            response = requests.post(f"{await self.config.api_url()}/tagger/v1/interrogate", json=payload, timeout=60)
             response.raise_for_status()
         except requests.RequestException as e:
             await ctx.reply(f"An error occurred while contacting the tagger API: {str(e)}", mention_author=True)
