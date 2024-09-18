@@ -365,7 +365,7 @@ class ImageGen(commands.Cog):
         sorted_tags = sorted(tags.items(), key=lambda x: x[1], reverse=True)
         
         # Generate a comma-separated string of tags
-        tag_string = ", ".join([tag for tag, score in sorted_tags])
+        tag_string = ", ".join([tag for tag, score in sorted_tags]).replace('_',' ')
         if len(tag_string) >= 3990:
             tag_string = tag_string[:3990]
             last_comma_index = tag_string.rfind(',')
