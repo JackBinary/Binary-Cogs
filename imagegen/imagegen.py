@@ -16,7 +16,7 @@ class ImageGenerator:
     def __init__(self):
         self.api_url = "http://127.0.0.1:7860"
         self.txt2img = "sdapi/v1/txt2img"
-        self.progress = "/internal/progress"
+        self.progress = "internal/progress"
         self.tasks = []
         self.in_progress = []
         self.images = {}
@@ -267,7 +267,7 @@ class ImageGen(commands.Cog):
                         image_data = base64.b64decode(result["image"])
                         image = BytesIO(image_data)
                         image.seek(0)
-                        result = self.upscaler.enhance_image(input_bytes, ext="png")
+                        result = self.upscaler.enhance_image(image, ext="png")
                         await message.edit(attachments=[File(fp=result, filename=f"{task_id}.png")])
                         break
     
@@ -310,7 +310,7 @@ class ImageGen(commands.Cog):
                     image_data = base64.b64decode(result["image"])
                     image = BytesIO(image_data)
                     image.seek(0)
-                    result = self.upscaler.enhance_image(input_bytes, ext="png")
+                    result = self.upscaler.enhance_image(image, ext="png")
                     await message.edit(attachments=[File(fp=result, filename=f"{new_task_id}.png")])
                     break
 
