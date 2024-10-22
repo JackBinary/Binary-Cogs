@@ -23,7 +23,7 @@ class RealESRGANAnimeUpscaler:
             scale=self.netscale,
             model_path=self.model_path,
             model=self.model,
-            tile=1024,  # No tiling by default
+            tile=0,  # No tiling by default
             tile_pad=32,
             pre_pad=0,
             half=True,  # Use fp16 by default for better performance
