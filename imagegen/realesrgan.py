@@ -62,7 +62,7 @@ class RealESRGANAnimeUpscaler:
             output_img.save(output_bytes, format=ext)
             output_bytes.seek(0)  # Reset pointer to the start of the BytesIO object
 
-        return output_bytes
+            return output_bytes
         except RuntimeError as error:
             print(f'Error: {error}')
             raise
