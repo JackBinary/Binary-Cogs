@@ -154,7 +154,7 @@ class ImageGen(commands.Cog):
         self.config = Config.get_conf(self, identifier=1234567890, force_registration=True)
         default_global = {"api_url": "http://127.0.0.1:7860"}
         self.config.register_global(**default_global)
-        upscaler = RealESRGANAnimeUpscaler()
+        self.upscaler = RealESRGANAnimeUpscaler()
 
         # Initialize ImageGenerator without setting the API URL yet
         self.image_generator = ImageGenerator()
@@ -267,7 +267,7 @@ class ImageGen(commands.Cog):
                         image_data = base64.b64decode(result["image"])
                         image = BytesIO(image_data)
                         image.seek(0)
-                        result = upscaler.enhance_image(input_bytes, ext="png")
+                        result = self.upscaler.enhance_image(input_bytes, ext="png")
                         await message.edit(attachments=[File(fp=result, filename=f"{task_id}.png")])
                         break
     
@@ -310,7 +310,7 @@ class ImageGen(commands.Cog):
                     image_data = base64.b64decode(result["image"])
                     image = BytesIO(image_data)
                     image.seek(0)
-                    result = upscaler.enhance_image(input_bytes, ext="png")
+                    result = self.upscaler.enhance_image(input_bytes, ext="png")
                     await message.edit(attachments=[File(fp=result, filename=f"{new_task_id}.png")])
                     break
 
