@@ -209,25 +209,26 @@ class ImageGen(commands.Cog):
             else:
                 positive_prompt.append(token)
 
-        positive_prompt = ', '.join(positive_prompt)
-        negative_prompt = ', '.join(negative_prompt)
+        positive_prompt = "<lora:StS_PonyXL_Detail_Slider_v1.4_iteration_3:1> <lora:StS_DoF_Bokeh_Slider_v0.9:1> <lora:naip33:0.8> <lora:JdotKdot_PDXL-v1-10:0.4> score_9, score_8_up, score_7_up, score_6_up, source_anime, " + ', '.join(positive_prompt)
+        negative_prompt = "source_furry, source_pony, 3d" + ', '.join(negative_prompt)
 
         # High-Resolution settings for the first Image (txt2img)
         payload = {
             "enable_hr": True,
             "hr_cfg": 2.5,
-            "denoising_strength": 0.7,
+            "denoising_strength": 0.4,
             "hr_scale": 1.3,
-            "hr_second_pass_steps": 8,
+            "hr_second_pass_steps": 4,
             "hr_upscaler": "Latent",
             "prompt": positive_prompt,
             "negative_prompt": negative_prompt,
             "seed": seed,
-            "steps": 8,
+            "steps": 6,
             "width": width,
             "height": height,
             "cfg_scale": 2.5,
             "sampler_name": "Euler a",
+            "scheduler" : "SGM Uniform",
             "batch_size": 1,
             "n_iter": 1,
             "force_task_id": task_id
