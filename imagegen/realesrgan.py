@@ -1,4 +1,13 @@
 import gc  # Import for garbage collection
+import os
+import cv2
+import torch
+from io import BytesIO
+from PIL import Image
+import numpy as np
+from basicsr.archs.rrdbnet_arch import RRDBNet
+from basicsr.utils.download_util import load_file_from_url
+from realesrgan import RealESRGANer
 
 class RealESRGANAnimeUpscaler:
     def __init__(self, outscale=4, gpu_id=None):
