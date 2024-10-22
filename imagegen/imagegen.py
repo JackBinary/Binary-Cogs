@@ -51,7 +51,7 @@ class ImageGenerator:
                     self.in_progress.remove(task_id)
                     image_base64 = response_json['images'][0]
                     self.images[task_id] = {"image": image_base64, "complete": True}
-            sleep(1)
+            sleep(0.5)
 
     def get_progress(self):
         while True:
@@ -70,7 +70,7 @@ class ImageGenerator:
                         self.images[task_id] = {"image": image_base64, "complete": False}
                     except AttributeError:
                         pass
-            sleep(1)
+            sleep(0.5)
 
     def remove_task(self, task_id):
         """Remove the task from the images dictionary after final image is sent."""
@@ -193,13 +193,10 @@ class ImageGen(commands.Cog):
                 if key == "aspect":
                     if value == "portrait":
                         width, height = 832, 1216
-                        final_width, final_height = 1080, 1576
                     elif value == "square":
                         width, height = 1024, 1024
-                        final_width, final_height = 1328, 1328
                     elif value == "landscape":
                         width, height = 1216, 832
-                        final_width, final_height = 1576, 1080
                 if key == "seed":
                     seed = int(value)
                 if key == "strength":
@@ -255,7 +252,7 @@ class ImageGen(commands.Cog):
                     if result["complete"]:
                         break
     
-                await asyncio.sleep(1)  # Poll every second
+                await asyncio.sleep(0.5)  # Poll every second
 
         # Add interactive buttons for "Accept", "Try Again", and "Delete"
         view = AcceptRetryDeleteButtons(self, ctx, task_id, payload, message)
@@ -286,7 +283,7 @@ class ImageGen(commands.Cog):
                 if result["complete"]:
                     break
 
-            await asyncio.sleep(1)  # Poll every second
+            await asyncio.sleep(0.5)  # Poll every second
 
         await message.edit(content="Done!")
         # Re-enable the buttons after retry
