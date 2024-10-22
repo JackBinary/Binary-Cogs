@@ -10,6 +10,8 @@ from redbot.core import commands
 from redbot.core.config import Config
 import asyncio
 
+from .realesrgan import RealESRGANAnimeUpscaler
+
 class ImageGenerator:
     def __init__(self):
         self.api_url = "http://127.0.0.1:7860"
@@ -81,13 +83,15 @@ class AcceptRetryDeleteButtons(ui.View):
     LABEL_TRY_AGAIN = "Try Again"
     LABEL_DRAWING = "Drawing..."
 
-    def __init__(self, cog, ctx, task_id, payload, message, timeout=60):
+    def __init__(self, cog, ctx, task_id, payload, message, final_width, final_height, timeout=60):
         super().__init__(timeout=timeout)
         self.cog = cog
         self.ctx = ctx
         self.task_id = task_id
         self.payload = payload
         self.message = message
+        self.final_width = final_width
+        self.final_height = final_height
 
     async def interaction_check(self, interaction: Interaction) -> bool:
         # Ensure only the original message author can interact with the buttons
@@ -122,7 +126,7 @@ class AcceptRetryDeleteButtons(ui.View):
 
         # Create a new task ID and retry image generation
         new_task_id = uuid.uuid4().hex
-        await self.cog.retry_task(self.ctx, new_task_id, self.payload, self.message, self)
+        await self.cog.retry_task(new_task_id, self)
 
     @ui.button(label="Delete", style=ButtonStyle.danger)
     async def delete(self, interaction: Interaction, button: ui.Button):
@@ -150,6 +154,7 @@ class ImageGen(commands.Cog):
         self.config = Config.get_conf(self, identifier=1234567890, force_registration=True)
         default_global = {"api_url": "http://127.0.0.1:7860"}
         self.config.register_global(**default_global)
+        upscaler = RealESRGANAnimeUpscaler()
 
         # Initialize ImageGenerator without setting the API URL yet
         self.image_generator = ImageGenerator()
@@ -193,10 +198,13 @@ class ImageGen(commands.Cog):
                 if key == "aspect":
                     if value == "portrait":
                         width, height = 832, 1216
+                        final_width, final_height = 3328, 4864
                     elif value == "square":
                         width, height = 1024, 1024
+                        final_width, final_height = 4096, 4096
                     elif value == "landscape":
                         width, height = 1216, 832
+                        final_width, final_height = 4864, 3328
                 if key == "seed":
                     seed = int(value)
                 if key == "strength":
@@ -246,20 +254,32 @@ class ImageGen(commands.Cog):
                         image = BytesIO(image_data)
                         image.seek(0)
 
+                        with Image.open(image) as img:
+                            img = img.resize((final_width, final_height), Image.Resampling.LANCZOS)
+                            buffer = BytesIO()
+                            img.save(buffer, format="PNG")
+                            buffer.seek(0)
+
                         # Send the resized preview image
-                        await message.edit(attachments=[File(fp=image, filename=f"{task_id}.png")])
+                        await message.edit(attachments=[File(fp=buffer, filename=f"{task_id}.png")])
     
                     if result["complete"]:
+                        image_data = base64.b64decode(result["image"])
+                        image = BytesIO(image_data)
+                        image.seek(0)
+                        result = upscaler.enhance_image(input_bytes, ext="png")
+                        await message.edit(attachments=[File(fp=result, filename=f"{task_id}.png")])
                         break
     
                 await asyncio.sleep(0.5)  # Poll every second
 
         # Add interactive buttons for "Accept", "Try Again", and "Delete"
-        view = AcceptRetryDeleteButtons(self, ctx, task_id, payload, message)
+        view = AcceptRetryDeleteButtons(self, ctx, task_id, payload, message, final_width, final_height)
         await message.edit(content="Done!", view=view)
 
-    async def retry_task(self, ctx, new_task_id, payload, message, view):
+    async def retry_task(self, new_task_id, view):
         """Handles retrying the image generation with the same payload."""
+        ctx, payload, message, final_width, final_height = view.ctx, view.payload, view.message, view.final_width, view.final_height
         
         payload["force_task_id"] = new_task_id  # Set the new task ID for retry
         self.image_generator.new_task(new_task_id, payload)
@@ -276,11 +296,22 @@ class ImageGen(commands.Cog):
                     image_data = base64.b64decode(base64_image)
                     image = BytesIO(image_data)
                     image.seek(0)
+
+                    with Image.open(image) as img:
+                        img = img.resize((final_width, final_height), Image.Resampling.LANCZOS)
+                        buffer = BytesIO()
+                        img.save(buffer, format="PNG")
+                        buffer.seek(0)
                     
                     # Send the resized preview image
-                    await message.edit(attachments=[File(fp=image, filename=f"{new_task_id}.png")])
+                    await message.edit(attachments=[File(fp=buffer, filename=f"{new_task_id}.png")])
 
                 if result["complete"]:
+                    image_data = base64.b64decode(result["image"])
+                    image = BytesIO(image_data)
+                    image.seek(0)
+                    result = upscaler.enhance_image(input_bytes, ext="png")
+                    await message.edit(attachments=[File(fp=result, filename=f"{new_task_id}.png")])
                     break
 
             await asyncio.sleep(0.5)  # Poll every second
