@@ -56,6 +56,13 @@ class RealESRGANAnimeUpscaler:
         # Enhance the image
         try:
             output, _ = self.upsampler.enhance(img, outscale=self.outscale)
+            # Convert the output back to BytesIO
+            output_img = Image.fromarray(cv2.cvtColor(output, cv2.COLOR_BGR2RGB))  # Convert back to RGB
+            output_bytes = BytesIO()
+            output_img.save(output_bytes, format=ext)
+            output_bytes.seek(0)  # Reset pointer to the start of the BytesIO object
+
+        return output_bytes
         except RuntimeError as error:
             print(f'Error: {error}')
             raise
@@ -64,14 +71,6 @@ class RealESRGANAnimeUpscaler:
             torch.cuda.empty_cache()  # Clear unused memory
             del img, output  # Manually delete objects
             gc.collect()  # Run garbage collection to free up memory
-
-        # Convert the output back to BytesIO
-        output_img = Image.fromarray(cv2.cvtColor(output, cv2.COLOR_BGR2RGB))  # Convert back to RGB
-        output_bytes = BytesIO()
-        output_img.save(output_bytes, format=ext)
-        output_bytes.seek(0)  # Reset pointer to the start of the BytesIO object
-
-        return output_bytes
 
     def __del__(self):
         """Ensure that the upsampler and model are cleaned up properly."""
