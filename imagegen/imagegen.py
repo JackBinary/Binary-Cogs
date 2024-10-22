@@ -217,7 +217,7 @@ class ImageGen(commands.Cog):
             "prompt": positive_prompt,
             "negative_prompt": negative_prompt,
             "seed": seed,
-            "steps": 6,
+            "steps": 8,
             "width": width,
             "height": height,
             "cfg_scale": 2.5,
@@ -249,14 +249,8 @@ class ImageGen(commands.Cog):
                         image = BytesIO(image_data)
                         image.seek(0)
 
-                        # Resize the image to the final dimensions
-                        with Image.open(image) as img:
-                            buffer = BytesIO()
-                            img.save(buffer, format="PNG")
-                            buffer.seek(0)
-
                         # Send the resized preview image
-                        await message.edit(attachments=[File(fp=buffer, filename=f"{task_id}.png")])
+                        await message.edit(attachments=[File(fp=image, filename=f"{task_id}.png")])
     
                     if result["complete"]:
                         break
@@ -285,15 +279,9 @@ class ImageGen(commands.Cog):
                     image_data = base64.b64decode(base64_image)
                     image = BytesIO(image_data)
                     image.seek(0)
-
-                    # Resize the image to the final dimensions
-                    with Image.open(image) as img:
-                        buffer = BytesIO()
-                        img.save(buffer, format="PNG")
-                        buffer.seek(0)
-
+                    
                     # Send the resized preview image
-                    await message.edit(attachments=[File(fp=buffer, filename=f"{new_task_id}.png")])
+                    await message.edit(attachments=[File(fp=image, filename=f"{new_task_id}.png")])
 
                 if result["complete"]:
                     break
