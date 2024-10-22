@@ -1,13 +1,4 @@
-import os
-import cv2
-import torch
-from io import BytesIO
-from PIL import Image
-import numpy as np
-from basicsr.archs.rrdbnet_arch import RRDBNet
-from basicsr.utils.download_util import load_file_from_url
-from realesrgan import RealESRGANer
-
+import gc  # Import for garbage collection
 
 class RealESRGANAnimeUpscaler:
     def __init__(self, outscale=4, gpu_id=None):
@@ -59,6 +50,11 @@ class RealESRGANAnimeUpscaler:
         except RuntimeError as error:
             print(f'Error: {error}')
             raise
+        finally:
+            # Free GPU memory
+            torch.cuda.empty_cache()  # Clear unused memory
+            del img, output  # Manually delete objects
+            gc.collect()  # Run garbage collection to free up memory
 
         # Convert the output back to BytesIO
         output_img = Image.fromarray(cv2.cvtColor(output, cv2.COLOR_BGR2RGB))  # Convert back to RGB
@@ -67,6 +63,12 @@ class RealESRGANAnimeUpscaler:
         output_bytes.seek(0)  # Reset pointer to the start of the BytesIO object
 
         return output_bytes
+
+    def __del__(self):
+        """Ensure that the upsampler and model are cleaned up properly."""
+        del self.upsampler
+        torch.cuda.empty_cache()  # Clear GPU memory
+        gc.collect()  # Clean up any lingering objects
 
 # Example usage of the class:
 # from your_module import RealESRGANAnimeUpscaler
