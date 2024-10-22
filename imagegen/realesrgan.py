@@ -69,7 +69,6 @@ class RealESRGANAnimeUpscaler:
         finally:
             # Free GPU memory
             torch.cuda.empty_cache()  # Clear unused memory
-            del img, output  # Manually delete objects
             gc.collect()  # Run garbage collection to free up memory
 
     def __del__(self):
