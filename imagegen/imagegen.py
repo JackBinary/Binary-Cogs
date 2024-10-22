@@ -214,12 +214,6 @@ class ImageGen(commands.Cog):
 
         # High-Resolution settings for the first Image (txt2img)
         payload = {
-            "enable_hr": True,
-            "hr_cfg": 2.5,
-            "denoising_strength": 0.4,
-            "hr_scale": 1.3,
-            "hr_second_pass_steps": 4,
-            "hr_upscaler": "Latent",
             "prompt": positive_prompt,
             "negative_prompt": negative_prompt,
             "seed": seed,
@@ -257,7 +251,6 @@ class ImageGen(commands.Cog):
 
                         # Resize the image to the final dimensions
                         with Image.open(image) as img:
-                            img = img.resize((final_width, final_height), Image.Resampling.LANCZOS)
                             buffer = BytesIO()
                             img.save(buffer, format="PNG")
                             buffer.seek(0)
@@ -295,7 +288,6 @@ class ImageGen(commands.Cog):
 
                     # Resize the image to the final dimensions
                     with Image.open(image) as img:
-                        img = img.resize((1080, 1576), Image.Resampling.LANCZOS)  # Use portrait dimensions for simplicity
                         buffer = BytesIO()
                         img.save(buffer, format="PNG")
                         buffer.seek(0)
