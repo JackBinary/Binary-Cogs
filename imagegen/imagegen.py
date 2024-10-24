@@ -10,8 +10,6 @@ from redbot.core import commands
 from redbot.core.config import Config
 import asyncio
 
-from .realesrgan import RealESRGANAnimeUpscaler
-
 class ImageGenerator:
     def __init__(self):
         self.api_url = "http://127.0.0.1:7860"
@@ -83,7 +81,7 @@ class AcceptRetryDeleteButtons(ui.View):
     LABEL_TRY_AGAIN = "Try Again"
     LABEL_DRAWING = "Drawing..."
 
-    def __init__(self, cog, ctx, task_id, payload, message, final_width, final_height, lock, timeout=60):
+    def __init__(self, cog, ctx, task_id, payload, message, timeout=60):
         super().__init__(timeout=timeout)
         self.cog = cog
         self.ctx = ctx
@@ -127,8 +125,7 @@ class AcceptRetryDeleteButtons(ui.View):
 
         # Create a new task ID and retry image generation
         new_task_id = uuid.uuid4().hex
-        with self.lock:
-            await self.cog.retry_task(new_task_id, self)
+        await self.cog.retry_task(new_task_id, self)
 
     @ui.button(label="Delete", style=ButtonStyle.danger)
     async def delete(self, interaction: Interaction, button: ui.Button):
@@ -156,8 +153,6 @@ class ImageGen(commands.Cog):
         self.config = Config.get_conf(self, identifier=1234567890, force_registration=True)
         default_global = {"api_url": "http://127.0.0.1:7860"}
         self.config.register_global(**default_global)
-        self.upscaler = RealESRGANAnimeUpscaler()
-        self.lock = threading.Lock()
 
         # Initialize ImageGenerator without setting the API URL yet
         self.image_generator = ImageGenerator()
@@ -190,7 +185,6 @@ class ImageGen(commands.Cog):
         negative_prompt = []
         # Default to portrait dimensions and final resized resolution
         width, height = 832, 1216
-        final_width, final_height = 1080, 1576
         seed = -1  # default to random
         strength = 0.5
 
@@ -201,13 +195,10 @@ class ImageGen(commands.Cog):
                 if key == "aspect":
                     if value == "portrait":
                         width, height = 832, 1216
-                        final_width, final_height = 3328, 4864
                     elif value == "square":
                         width, height = 1024, 1024
-                        final_width, final_height = 4096, 4096
                     elif value == "landscape":
                         width, height = 1216, 832
-                        final_width, final_height = 4864, 3328
                 if key == "seed":
                     seed = int(value)
                 if key == "strength":
@@ -238,47 +229,35 @@ class ImageGen(commands.Cog):
 
         # Add the task to the ImageGenerator queue
         print(task_id, text)
-        with self.lock:
-            self.image_generator.new_task(task_id, payload)
+        self.image_generator.new_task(task_id, payload)
+
+        # Inform the user that the task has been submitted
+        message = await ctx.reply(f"Generating...", mention_author=True)
+
+        # Wait for the image generation result and fetch it
+        async with ctx.typing():
+            base64_image = None  # to track the last image's base64 string
+            while True:
+                result = self.image_generator.callback(task_id)
+                if result:
+                    current_image_base64 = result["image"]
+                    if current_image_base64 != base64_image:  # Check if new image base64 string exists
+                        base64_image = current_image_base64
+                        # Decode the base64 string only when sending the image
+                        image_data = base64.b64decode(base64_image)
+                        image = BytesIO(image_data)
+                        image.seek(0)
+                        
+                        # Send the resized preview image
+                        await message.edit(attachments=[File(fp=image, filename=f"{task_id}.png")])
     
-            # Inform the user that the task has been submitted
-            message = await ctx.reply(f"Generating...", mention_author=True)
+                    if result["complete"]:
+                        break
     
-            # Wait for the image generation result and fetch it
-            async with ctx.typing():
-                base64_image = None  # to track the last image's base64 string
-                while True:
-                    result = self.image_generator.callback(task_id)
-                    if result:
-                        current_image_base64 = result["image"]
-                        if current_image_base64 != base64_image:  # Check if new image base64 string exists
-                            base64_image = current_image_base64
-                            # Decode the base64 string only when sending the image
-                            image_data = base64.b64decode(base64_image)
-                            image = BytesIO(image_data)
-                            image.seek(0)
-    
-                            with Image.open(image) as img:
-                                img = img.resize((final_width, final_height), Image.Resampling.LANCZOS)
-                                buffer = BytesIO()
-                                img.save(buffer, format="PNG")
-                                buffer.seek(0)
-    
-                            # Send the resized preview image
-                            await message.edit(attachments=[File(fp=buffer, filename=f"{task_id}.png")])
-        
-                        if result["complete"]:
-                            image_data = base64.b64decode(result["image"])
-                            image = BytesIO(image_data)
-                            image.seek(0)
-                            result = self.upscaler.enhance_image(image, ext="png")
-                            await message.edit(attachments=[File(fp=result, filename=f"{task_id}.png")])
-                            break
-        
-                    await asyncio.sleep(0.5)  # Poll every second
+                await asyncio.sleep(0.5)  # Poll every second
 
         # Add interactive buttons for "Accept", "Try Again", and "Delete"
-        view = AcceptRetryDeleteButtons(self, ctx, task_id, payload, message, final_width, final_height, self.lock)
+        view = AcceptRetryDeleteButtons(self, ctx, task_id, payload, message)
         await message.edit(content="Done!", view=view)
 
     async def retry_task(self, new_task_id, view):
