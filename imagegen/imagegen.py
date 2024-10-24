@@ -259,7 +259,7 @@ class ImageGen(commands.Cog):
 
     async def retry_task(self, new_task_id, view):
         """Handles retrying the image generation with the same payload."""
-        ctx, payload, message, final_width, final_height = view.ctx, view.payload, view.message, view.final_width, view.final_height
+        ctx, payload, message, = view.ctx, view.payload, view.message
         
         payload["force_task_id"] = new_task_id  # Set the new task ID for retry
         self.image_generator.new_task(new_task_id, payload)
@@ -276,22 +276,9 @@ class ImageGen(commands.Cog):
                     image_data = base64.b64decode(base64_image)
                     image = BytesIO(image_data)
                     image.seek(0)
-
-                    with Image.open(image) as img:
-                        img = img.resize((final_width, final_height), Image.Resampling.LANCZOS)
-                        buffer = BytesIO()
-                        img.save(buffer, format="PNG")
-                        buffer.seek(0)
-                    
-                    # Send the resized preview image
-                    await message.edit(attachments=[File(fp=buffer, filename=f"{new_task_id}.png")])
+                    await message.edit(attachments=[File(fp=image, filename=f"{new_task_id}.png")])
 
                 if result["complete"]:
-                    image_data = base64.b64decode(result["image"])
-                    image = BytesIO(image_data)
-                    image.seek(0)
-                    result = self.upscaler.enhance_image(image, ext="png")
-                    await message.edit(attachments=[File(fp=result, filename=f"{new_task_id}.png")])
                     break
 
             await asyncio.sleep(0.5)  # Poll every second
