@@ -88,9 +88,6 @@ class AcceptRetryDeleteButtons(ui.View):
         self.task_id = task_id
         self.payload = payload
         self.message = message
-        self.final_width = final_width
-        self.final_height = final_height
-        self.lock = lock
 
     async def interaction_check(self, interaction: Interaction) -> bool:
         # Ensure only the original message author can interact with the buttons
