@@ -184,21 +184,24 @@ class ImageGen(commands.Cog):
         width, height = 832, 1216
         seed = -1  # default to random
         strength = 0.5
+        steps = 8
 
         for token in tokens:
             if "=" in token:
                 key, value = token.split("=", 1)
                 key, value = key.strip(), value.strip()
-                if key == "aspect":
+                if key == "steps":
+                    steps = int(value)
+                elif key == "aspect":
                     if value == "portrait":
                         width, height = 832, 1216
                     elif value == "square":
                         width, height = 1024, 1024
                     elif value == "landscape":
                         width, height = 1216, 832
-                if key == "seed":
+                elif key == "seed":
                     seed = int(value)
-                if key == "strength":
+                elif key == "strength":
                     strength = float(value)
             elif token.startswith("-"):
                 negative_prompt.append(token.lstrip("-").strip())
@@ -213,7 +216,7 @@ class ImageGen(commands.Cog):
             "prompt": positive_prompt,
             "negative_prompt": negative_prompt,
             "seed": seed,
-            "steps": 8,
+            "steps": steps,
             "width": width,
             "height": height,
             "cfg_scale": 2.5,
