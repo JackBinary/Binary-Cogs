@@ -148,8 +148,14 @@ class ImageGen(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.config = Config.get_conf(self, identifier=1234567890, force_registration=True)
-        default_global = {"api_url": "http://127.0.0.1:7860"}
+        default_global = {
+            "api_url": "http://127.0.0.1:7860",
+        }
+        default_channel = {
+            "loras": "<lora:StS_PonyXL_Detail_Slider_v1.4_iteration_3:1> <lora:StS_DoF_Bokeh_Slider_v0.9:1> <lora:naip33:0.8> <lora:JdotKdot_PDXL-v1-10:0.4>"
+        }
         self.config.register_global(**default_global)
+        self.config.register_channel(**default_channel)
 
         # Initialize ImageGenerator without setting the API URL yet
         self.image_generator = ImageGenerator()
@@ -159,6 +165,12 @@ class ImageGen(commands.Cog):
         # Set API URL when the bot is ready
         api_url = await self.config.api_url()
         self.image_generator.set_url(api_url)
+
+    @commands.command()
+    async def setlora(self, ctx, *, loras: str):
+        """Set the default LoRAs for the current channel."""
+        await self.config.channel(ctx.channel).loras.set(loras)
+        await ctx.reply(f"LoRAs for this channel have been updated:\n{loras}", mention_author=True)
 
     @commands.command()
     async def setapiurl(self, ctx, url: str):
@@ -208,8 +220,9 @@ class ImageGen(commands.Cog):
             else:
                 positive_prompt.append(token)
 
-        positive_prompt = "<lora:StS_PonyXL_Detail_Slider_v1.4_iteration_3:1> <lora:StS_DoF_Bokeh_Slider_v0.9:1> <lora:naip33:0.8> <lora:JdotKdot_PDXL-v1-10:0.4> score_9, score_8_up, score_7_up, score_6_up, source_anime, " + ', '.join(positive_prompt)
-        negative_prompt = "source_furry, source_pony, 3d" + ', '.join(negative_prompt)
+        loras = await self.config.channel(ctx.channel).loras()
+        positive_prompt = f"{loras} score_9, score_8_up, score_7_up, score_6_up, source_anime, " + ', '.join(positive_prompt)
+        negative_prompt = "source_furry, source_pony, 3d, " + ', '.join(negative_prompt)
 
         # High-Resolution settings for the first Image (txt2img)
         payload = {
