@@ -395,7 +395,7 @@ class ImageGen(commands.Cog):
         
         # Prepare the payload for the tagger API to get tags
         tagger_payload = {
-            "image": init_image,
+            "image": image_base64,
             "model": "wd-v1-4-moat-tagger.v2",
             "threshold": 0.35,
             "queue": "",
@@ -445,6 +445,7 @@ class ImageGen(commands.Cog):
                 new_height = max(64, int(orig_height // 64) * 64)
 
         payload = {
+            "init_images": [image_base64],
             "prompt": positive_prompt,
             "negative_prompt": negative_prompt,
             "seed": -1,
