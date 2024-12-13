@@ -375,6 +375,7 @@ class ImageGen(commands.Cog):
     @commands.command(name="stylize")
     async def stylize(self, ctx):
         """Stylize an uploaded image using the Stable Diffusion img2img endpoint."""
+        task_id = uuid.uuid4().hex
         
         # Check if the user attached an image
         if len(ctx.message.attachments) == 0:
