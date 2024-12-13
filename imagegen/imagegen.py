@@ -441,7 +441,7 @@ class ImageGen(commands.Cog):
             "batch_size": 1,
             "n_iter": 1,
             "force_task_id": task_id,
-            "denoising_strength": float(text)
+            "denoising_strength": float(text) if text else 0.4
         }
         
         # Add the task to the ImageGenerator queue
