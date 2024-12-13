@@ -464,7 +464,7 @@ class ImageGen(commands.Cog):
         
         
         # Add the task to the ImageGenerator queue
-        print(task_id, text)
+        print(task_id, positive_prompt)
         self.image_generator.new_task(task_id, payload, "img2img")
 
         # Inform the user that the task has been submitted
