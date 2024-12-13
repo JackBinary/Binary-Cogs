@@ -14,6 +14,7 @@ class ImageGenerator:
     def __init__(self):
         self.api_url = "http://127.0.0.1:7860"
         self.txt2img = "sdapi/v1/txt2img"
+        self.img2img = "sdapi/v1/img2img"
         self.progress = "internal/progress"
         self.tasks = []
         self.in_progress = []
@@ -26,8 +27,8 @@ class ImageGenerator:
     def set_url(self, url):
         self.api_url = url
 
-    def new_task(self, task_id, payload):
-        self.tasks.append({"id": task_id, "payload": payload})
+    def new_task(self, task_id, payload, type):
+        self.tasks.append({"id": task_id, "payload": payload, "type":type})
 
     def callback(self, task_id):
         if task_id in self.images:
@@ -41,10 +42,14 @@ class ImageGenerator:
                 task = self.tasks.pop(0)
                 task_id = task["id"]
                 payload = task["payload"]
+                task_type = task["type"]
                 self.in_progress.append(task_id)
 
                 # Generate image
-                response = requests.post(f"{self.api_url}/{self.txt2img}", json=payload, timeout=60)
+                if task_type == "img2img":
+                    response = requests.post(f"{self.api_url}/{self.img2img}", json=payload, timeout=60)
+                else:
+                    response = requests.post(f"{self.api_url}/{self.txt2img}", json=payload, timeout=60)
                 response.raise_for_status()
                 response_json = response.json()
                 if 'images' in response_json:
@@ -242,7 +247,7 @@ class ImageGen(commands.Cog):
 
         # Add the task to the ImageGenerator queue
         print(task_id, text)
-        self.image_generator.new_task(task_id, payload)
+        self.image_generator.new_task(task_id, payload, "txt2img")
 
         # Inform the user that the task has been submitted
         message = await ctx.reply(f"Generating...", mention_author=True)
@@ -278,7 +283,7 @@ class ImageGen(commands.Cog):
         ctx, payload, message, = view.ctx, view.payload, view.message
         
         payload["force_task_id"] = new_task_id  # Set the new task ID for retry
-        self.image_generator.new_task(new_task_id, payload)
+        self.image_generator.new_task(new_task_id, payload, "txt2img")
         await message.edit(content="Generating...")
         # Wait for the new image to be generated
         base64_image = None  # to track the last image's base64 string
@@ -366,3 +371,122 @@ class ImageGen(commands.Cog):
         
         # Reply with the formatted tags in a code block
         await ctx.reply(f"```\n{tag_string}\n```", mention_author=True)
+    
+    @commands.command(name="stylize")
+    async def stylize(self, ctx):
+        """Stylize an uploaded image using the Stable Diffusion img2img endpoint."""
+        
+        # Check if the user attached an image
+        if len(ctx.message.attachments) == 0:
+            await ctx.reply("Please attach an image to use this command.", mention_author=True)
+            return
+        
+        # Fetch the image from the attachment
+        attachment = ctx.message.attachments[0]
+        if not attachment.content_type.startswith('image/'):
+            await ctx.reply("Please attach a valid image file.", mention_author=True)
+            return
+        
+        # Download the image data
+        image_data = await attachment.read()
+        
+        # Convert the image to base64
+        image_base64 = base64.b64encode(image_data).decode("utf-8")
+        
+        # Prepare the payload for the tagger API to get tags
+        tagger_payload = {
+            "image": init_image,
+            "model": "wd-v1-4-moat-tagger.v2",
+            "threshold": 0.35,
+            "queue": "",
+            "name_in_queue": ""
+        }
+
+        try:
+            response = requests.post(f"{await self.config.api_url()}/tagger/v1/interrogate", json=tagger_payload, timeout=60)
+            response.raise_for_status()
+        except requests.RequestException as e:
+            await ctx.reply(f"An error occurred while contacting the tagger API: {str(e)}", mention_author=True)
+            return
+
+        try:
+            data = response.json()
+            tags = data.get("caption", {}).get("tag", {})
+        except (ValueError, KeyError):
+            await ctx.reply("Failed to parse the response from the tagger API.", mention_author=True)
+            return
+        
+        # Generate a comma-separated string of tags
+        loras = await self.config.channel(ctx.channel).loras()
+        positive_prompt = f"{loras} score_9, score_8_up, score_7_up, score_6_up, source_anime, " + ", ".join([tag for tag, score in sorted(tags.items(), key=lambda x: x[1], reverse=True)]).replace('_', ' ')
+        negative_prompt = "source_furry, source_pony, 3d"
+        
+        # Open the image to determine dimensions
+        with BytesIO(image_data) as img_buffer:
+            img = Image.open(img_buffer)
+            orig_width, orig_height = img.size
+            
+        orig_width *= 2
+        orig_height *= 2
+        
+        if orig_width == orig_height:
+            if orig_width > 2048:
+                new_width = new_height = 2048
+            else:
+                new_width = new_height = orig_width
+        else:
+            product = orig_width * orig_height
+            if product > 4046848:
+                scale_factor = (4046848 / product) ** 0.5  # Find scaling factor for both
+                new_width = int((orig_width * scale_factor) // 64) * 64  # Scale and ensure multiple of 64
+                new_height = int((orig_height * scale_factor) // 64) * 64
+            else:
+                new_width = max(64, int(orig_width // 64) * 64)
+                new_height = max(64, int(orig_height // 64) * 64)
+
+        payload = {
+            "prompt": positive_prompt,
+            "negative_prompt": negative_prompt,
+            "seed": -1,
+            "steps": 28,
+            "width": width,
+            "height": height,
+            "cfg_scale": 2.5,
+            "sampler_name": "Euler a",
+            "scheduler" : "SGM Uniform",
+            "batch_size": 1,
+            "n_iter": 1,
+            "force_task_id": task_id,
+            "denoising_strength": 0.4
+        }
+        
+        
+        # Add the task to the ImageGenerator queue
+        print(task_id, text)
+        self.image_generator.new_task(task_id, payload, "img2img")
+
+        # Inform the user that the task has been submitted
+        message = await ctx.reply(f"Generating...", mention_author=True)
+
+        # Wait for the image generation result and fetch it
+        async with ctx.typing():
+            base64_image = None  # to track the last image's base64 string
+            while True:
+                result = self.image_generator.callback(task_id)
+                if result:
+                    current_image_base64 = result["image"]
+                    if current_image_base64 != base64_image:  # Check if new image base64 string exists
+                        base64_image = current_image_base64
+                        # Decode the base64 string only when sending the image
+                        image_data = base64.b64decode(base64_image)
+                        image = BytesIO(image_data)
+                        image.seek(0)
+                        
+                        # Send the resized preview image
+                        await message.edit(attachments=[File(fp=image, filename=f"{task_id}.png")])
+    
+                    if result["complete"]:
+                        break
+    
+                await asyncio.sleep(0.5)  # Poll every second
+        await message.edit(content="Done!")
