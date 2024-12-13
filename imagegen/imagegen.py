@@ -372,9 +372,9 @@ class ImageGen(commands.Cog):
         # Reply with the formatted tags in a code block
         await ctx.reply(f"```\n{tag_string}\n```", mention_author=True)
     
-    @commands.command(name="stylize")
-    async def stylize(self, ctx):
-        """Stylize an uploaded image using the Stable Diffusion img2img endpoint."""
+    @commands.command(name="enhance")
+    async def enhance(self, ctx, *, text: str):
+        """redraw an uploaded image using the Stable Diffusion img2img endpoint."""
         task_id = uuid.uuid4().hex
         
         # Check if the user attached an image
@@ -426,24 +426,6 @@ class ImageGen(commands.Cog):
         with BytesIO(image_data) as img_buffer:
             img = Image.open(img_buffer)
             orig_width, orig_height = img.size
-            
-        orig_width *= 2
-        orig_height *= 2
-        
-        if orig_width == orig_height:
-            if orig_width > 2048:
-                new_width = new_height = 2048
-            else:
-                new_width = new_height = orig_width
-        else:
-            product = orig_width * orig_height
-            if product > 4046848:
-                scale_factor = (4046848 / product) ** 0.5  # Find scaling factor for both
-                new_width = int((orig_width * scale_factor) // 64) * 64  # Scale and ensure multiple of 64
-                new_height = int((orig_height * scale_factor) // 64) * 64
-            else:
-                new_width = max(64, int(orig_width // 64) * 64)
-                new_height = max(64, int(orig_height // 64) * 64)
 
         payload = {
             "init_images": [image_base64],
@@ -451,17 +433,16 @@ class ImageGen(commands.Cog):
             "negative_prompt": negative_prompt,
             "seed": -1,
             "steps": 28,
-            "width": new_width,
-            "height": new_height,
+            "width": max(64, int(orig_width // 32) * 32),
+            "height": max(64, int(orig_height // 32) * 32),
             "cfg_scale": 2.5,
             "sampler_name": "Euler a",
             "scheduler" : "SGM Uniform",
             "batch_size": 1,
             "n_iter": 1,
             "force_task_id": task_id,
-            "denoising_strength": 0.4
+            "denoising_strength": float(text)
         }
-        
         
         # Add the task to the ImageGenerator queue
         print(task_id, positive_prompt)
