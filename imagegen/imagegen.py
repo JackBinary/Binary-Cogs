@@ -47,9 +47,9 @@ class ImageGenerator:
 
                 # Generate image
                 if task_type == "img2img":
-                    response = requests.post(f"{self.api_url}/{self.img2img}", json=payload, timeout=60)
+                    response = requests.post(f"{self.api_url}/{self.img2img}", json=payload, timeout=300)
                 else:
-                    response = requests.post(f"{self.api_url}/{self.txt2img}", json=payload, timeout=60)
+                    response = requests.post(f"{self.api_url}/{self.txt2img}", json=payload, timeout=300)
                 response.raise_for_status()
                 response_json = response.json()
                 if 'images' in response_json:
@@ -255,7 +255,7 @@ class ImageGen(commands.Cog):
         # Wait for the image generation result and fetch it
         async with ctx.typing():
             base64_image = None  # to track the last image's base64 string
-            while True:
+            for _ in range(300):
                 result = self.image_generator.callback(task_id)
                 if result:
                     current_image_base64 = result["image"]
@@ -272,7 +272,7 @@ class ImageGen(commands.Cog):
                     if result["complete"]:
                         break
     
-                await asyncio.sleep(0.5)  # Poll every second
+                await asyncio.sleep(1)  # Poll every second
 
         # Add interactive buttons for "Accept", "Try Again", and "Delete"
         view = AcceptRetryDeleteButtons(self, ctx, task_id, payload, message)
@@ -454,7 +454,7 @@ class ImageGen(commands.Cog):
         # Wait for the image generation result and fetch it
         async with ctx.typing():
             base64_image = None  # to track the last image's base64 string
-            while True:
+            for _ in range(300):
                 result = self.image_generator.callback(task_id)
                 if result:
                     current_image_base64 = result["image"]
@@ -471,5 +471,5 @@ class ImageGen(commands.Cog):
                     if result["complete"]:
                         break
     
-                await asyncio.sleep(0.5)  # Poll every second
+                await asyncio.sleep(1)  # Poll every second
         await message.edit(content="Done!")
