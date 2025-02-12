@@ -157,7 +157,7 @@ class ImageGen(commands.Cog):
             "api_url": "http://127.0.0.1:7860",
         }
         default_channel = {
-            "loras": "<lora:StS_PonyXL_Detail_Slider_v1.4_iteration_3:1> <lora:StS_DoF_Bokeh_Slider_v0.9:1> <lora:naip33:0.8> <lora:JdotKdot_PDXL-v1-10:0.4>"
+            "loras": "<lora:multi-twt-ai_style:1>"
         }
         self.config.register_global(**default_global)
         self.config.register_channel(**default_channel)
@@ -201,7 +201,7 @@ class ImageGen(commands.Cog):
         width, height = 832, 1216
         seed = -1  # default to random
         strength = 0.5
-        steps = 8
+        steps = 20
 
         for token in tokens:
             if "=" in token:
@@ -226,8 +226,8 @@ class ImageGen(commands.Cog):
                 positive_prompt.append(token)
 
         loras = await self.config.channel(ctx.channel).loras()
-        positive_prompt = f"{loras} score_9, score_8_up, score_7_up, score_6_up, source_anime, " + ', '.join(positive_prompt)
-        negative_prompt = "source_furry, source_pony, 3d, " + ', '.join(negative_prompt)
+        positive_prompt = f"{loras} masterpiece, best quality, amazing quality, " + ', '.join(positive_prompt)
+        negative_prompt = "bad quality, worst quality, worst detail, sketch, censor, " + ', '.join(negative_prompt)
 
         # High-Resolution settings for the first Image (txt2img)
         payload = {
@@ -237,9 +237,9 @@ class ImageGen(commands.Cog):
             "steps": steps,
             "width": width,
             "height": height,
-            "cfg_scale": 2.5,
-            "sampler_name": "Euler a",
-            "scheduler" : "SGM Uniform",
+            "cfg_scale": 4.5,
+            "sampler_name": "Euler",
+            "scheduler" : "Karras",
             "batch_size": 1,
             "n_iter": 1,
             "force_task_id": task_id
