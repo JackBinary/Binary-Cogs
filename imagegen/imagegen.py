@@ -227,7 +227,7 @@ class ImageGen(commands.Cog):
 
         loras = await self.config.channel(ctx.channel).loras()
         positive_prompt = f"{loras} masterpiece, best quality, amazing quality, " + ', '.join(positive_prompt)
-        negative_prompt = "bad quality, worst quality, worst detail, sketch, censor, " + ', '.join(negative_prompt)
+        negative_prompt = "bad quality, worst quality, worst detail, sketch, censor, watermark, signature, " + ', '.join(negative_prompt)
 
         # High-Resolution settings for the first Image (txt2img)
         payload = {
