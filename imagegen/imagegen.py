@@ -157,7 +157,7 @@ class ImageGen(commands.Cog):
             "api_url": "http://127.0.0.1:7860",
         }
         default_channel = {
-            "loras": "<lora:multi-twt-ai_style:1>"
+            "loras": "(squchan:0.6), (j.k.:0.4), (fizintine:0.5),"
         }
         self.config.register_global(**default_global)
         self.config.register_channel(**default_channel)
