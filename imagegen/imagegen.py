@@ -226,6 +226,11 @@ class ImageGen(commands.Cog):
                 positive_prompt.append(token)
 
         loras = await self.config.channel(ctx.channel).loras()
+        is_nsfw = await ctx.channel.is_nsfw()
+        if not is_nsfw:
+            positive_prompt.insert(0, "general")
+            negative_prompt.insert(0, "nsfw, explicit")
+        
         positive_prompt = f"{loras} masterpiece, best quality, amazing quality, " + ', '.join(positive_prompt)
         negative_prompt = "bad quality, worst quality, worst detail, sketch, censor, watermark, signature, " + ', '.join(negative_prompt)
 
@@ -438,10 +443,16 @@ class ImageGen(commands.Cog):
     
         # Generate a comma-separated string of tags
         loras = await self.config.channel(ctx.channel).loras()
-        positive_prompt = f"{loras} score_9, score_8_up, score_7_up, score_6_up, source_anime, " + ", ".join(
-            [tag for tag, score in sorted(tags.items(), key=lambda x: x[1], reverse=True)]
-        ).replace('_', ' ')
-        negative_prompt = "source_furry, source_pony, 3d"
+        is_nsfw = await ctx.channel.is_nsfw()
+        tag_list = [tag for tag, score in sorted(tags.items(), key=lambda x: x[1], reverse=True)]
+        
+        if not is_nsfw:
+            tag_list.insert(0, "general")
+            negative_prompt = "bad quality, worst quality, worst detail, sketch, censor, watermark, signature, nsfw, explicit"
+        else:
+            negative_prompt = "bad quality, worst quality, worst detail, sketch, censor, watermark, signature"
+        
+        positive_prompt = f"{loras} score_9, score_8_up, score_7_up, score_6_up, source_anime, " + ", ".join(tag_list).replace('_', ' ')
     
         payload = {
             "init_images": [image_base64],
