@@ -226,7 +226,7 @@ class ImageGen(commands.Cog):
                 positive_prompt.append(token)
 
         loras = await self.config.channel(ctx.channel).loras()
-        is_nsfw = await ctx.channel.is_nsfw()
+        is_nsfw = ctx.channel.is_nsfw()
         if not is_nsfw:
             positive_prompt.insert(0, "general")
             negative_prompt.insert(0, "nsfw, explicit")
@@ -443,7 +443,7 @@ class ImageGen(commands.Cog):
     
         # Generate a comma-separated string of tags
         loras = await self.config.channel(ctx.channel).loras()
-        is_nsfw = await ctx.channel.is_nsfw()
+        is_nsfw = ctx.channel.is_nsfw()
         tag_list = [tag for tag, score in sorted(tags.items(), key=lambda x: x[1], reverse=True)]
         
         if not is_nsfw:
