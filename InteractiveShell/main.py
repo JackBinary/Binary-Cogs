@@ -24,8 +24,11 @@ class InteractiveShell(commands.Cog):
 
     def log_attempt(self, user, session_type):
         """Log an attempt to start a shell or SSH session."""
-        with open(self.log_file, "a") as f:
-            f.write(f"{datetime.utcnow().isoformat()} - {user} (ID: {user.id}) attempted to start a {session_type} session.\n")
+        try:
+            with open(self.log_file, "a") as f:
+                f.write(f"{datetime.utcnow().isoformat()} - {user} (ID: {user.id}) attempted to start a {session_type} session.\n")
+        except:
+            return
 
     @commands.command()
     @commands.is_owner()
