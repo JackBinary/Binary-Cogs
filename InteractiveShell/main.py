@@ -1,6 +1,7 @@
 import asyncio
 import subprocess
 import discord
+import io
 from redbot.core import commands
 from redbot.core.bot import Red
 from datetime import datetime
@@ -104,9 +105,11 @@ class InteractiveShell(commands.Cog):
                     output = stdout.read().decode() + stderr.read().decode()
                     if len(output) > 2000:
                         await ctx.send("Output too long to display, sending as a file.")
-                        with open("ssh_output.txt", "w") as f:
-                            f.write(output)
-                        await ctx.send(file=discord.File("ssh_output.txt"))
+                        buffer = io.BytesIO()
+                        buffer.write(output.encode())  # encode to bytes
+                        buffer.seek(0)  # reset cursor to start
+                        
+                        await ctx.send(file=discord.File(fp=buffer, filename="ssh_output.txt"))
                     else:
                         await ctx.send(f"```\n{output}\n```")
                 except Exception as e:
