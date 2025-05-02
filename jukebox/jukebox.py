@@ -3,10 +3,12 @@ import asyncio
 import json
 import random
 import re
+import tempfile
 from pathlib import Path
 from typing import Optional
 
 from redbot.core import commands, Config
+from gtts import gTTS
 
 DEFAULT_VOLUME = 1.0
 
@@ -402,4 +404,40 @@ class Jukebox(commands.Cog):
                 return
     
         await ctx.send(f"❌ Track `{track_name}` not found in playlist `{name}`.")
+
+    @jukebox.command(name="say")
+    async def say(self, ctx: commands.Context, *, text: str):
+        """Speak a message using TTS without clearing the music queue."""
+        voice = ctx.voice_client
+        if not voice or not voice.is_connected():
+            await ctx.send("I'm not in a voice channel.")
+            return
+    
+        # Pause current track if playing
+        was_playing = voice.is_playing()
+        if was_playing:
+            voice.pause()
+    
+        # Generate TTS clip
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as f:
+            tts = gTTS(text)
+            tts.save(f.name)
+            tts_path = f.name
+    
+        # Play TTS clip
+        tts_done = asyncio.Event()
+    
+        def after_speak(error):
+            if error:
+                print(f"TTS playback error: {error}")
+            self.bot.loop.call_soon_threadsafe(tts_done.set)
+    
+        voice.play(discord.FFmpegPCMAudio(tts_path), after=after_speak)
+        await tts_done.wait()
+    
+        # Resume music
+        if was_playing:
+            voice.resume()
+    
+        await ctx.send(f"🗣️ Said: `{text}`")
 
