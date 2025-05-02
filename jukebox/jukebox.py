@@ -432,24 +432,23 @@ class Jukebox(commands.Cog):
         guild_id = ctx.guild.id
         current_song = self.current_track.get(guild_id)
     
-        # Estimate playback position
-        current_position = 0
-        if voice.is_playing():
-            current_position = getattr(voice.source, "_start_time", time.time())
-            current_position = time.time() - current_position
+        # Capture current playback position
+        original_source = voice.source
+        start_time = getattr(original_source, "_start_time", None)
+        current_position = time.time() - start_time if start_time else 0
     
-        # Stop music
+        # Stop music cleanly
         if voice.is_playing():
             voice.stop()
             while voice.is_playing():
                 await asyncio.sleep(0.1)
     
-        # Get voice setting (default to en-US-AriaNeural)
+        # Get configured TTS voice or default
         config_voice = await self.config.guild(ctx.guild).tts_voice()
         if not config_voice:
             config_voice = "en-US-AriaNeural"
     
-        # Generate TTS with edge-tts
+        # Generate TTS audio
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as f:
             tts_path = f.name
         await edge_tts.Communicate(text, config_voice).save(tts_path)
@@ -468,22 +467,23 @@ class Jukebox(commands.Cog):
         except Exception:
             pass
     
-        # Resume music using seek
+        # Resume music at correct position
         if current_song:
-            seek_seconds = int(current_position)
             ffmpeg_opts = {
-                'before_options': f"-ss {seek_seconds}",
+                'before_options': f"-ss {int(current_position)}",
                 'options': "-vn"
             }
     
-            new_source = discord.PCMVolumeTransformer(
+            resumed_source = discord.PCMVolumeTransformer(
                 discord.FFmpegPCMAudio(current_song, **ffmpeg_opts),
                 volume=await self.config.guild(ctx.guild).volume()
             )
+            resumed_source._start_time = time.time()
     
-            voice.play(new_source)
+            voice.play(resumed_source)
             self.current_track[guild_id] = current_song
     
+        # React to confirm
         try:
             await ctx.message.add_reaction("🗣️")
         except discord.HTTPException:
