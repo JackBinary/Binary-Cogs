@@ -356,49 +356,49 @@ class Jukebox(commands.Cog):
         await ctx.send(f"✅ Added `{song_name}` to playlist `{name}`.")
 
     @playlist.command(name="play")
-async def playlist_play(self, ctx: commands.Context, name: str):
-    """Stop current playback and start playing a playlist."""
-    playlist = self._load_playlist(name)
-    if not playlist:
-        await ctx.send(f"❌ Playlist `{name}` is empty or does not exist.")
-        return
-
-    guild_id = ctx.guild.id
-    voice = ctx.voice_client
-
-    # If already connected and playing, stop playback cleanly
-    if voice and voice.is_connected():
-        if voice.is_playing():
-            voice.stop()
-
-    # Reset queue and track
-    self.queue[guild_id] = []
-    self.current_track[guild_id] = None
-
-    # Add each track to the queue like the play command would
-    for song_path in playlist:
-        if Path(song_path).is_file():
-            self.queue[guild_id].append(song_path)
-
-    await ctx.send(f"▶️ Playing playlist `{name}` with `{len(playlist)}` tracks.")
-
-    # Start the playback loop if it's not already active
-    if guild_id not in self.players or self.players[guild_id].done():
-        self.players[guild_id] = self.bot.loop.create_task(self._playback_loop(ctx))
-
-    @playlist.command(name="delete")
-    async def playlist_delete(self, ctx: commands.Context, name: str):
-        """Delete a playlist."""
-        path = self._get_playlist_file(name)
-        if not path.exists():
-            await ctx.send(f"❌ Playlist `{name}` does not exist.")
+    async def playlist_play(self, ctx: commands.Context, name: str):
+        """Stop current playback and start playing a playlist."""
+        playlist = self._load_playlist(name)
+        if not playlist:
+            await ctx.send(f"❌ Playlist `{name}` is empty or does not exist.")
             return
     
-        try:
-            path.unlink()
-            await ctx.send(f"🗑️ Deleted playlist `{name}`.")
-        except Exception as e:
-            await ctx.send(f"⚠️ Failed to delete playlist `{name}`: {e}")
+        guild_id = ctx.guild.id
+        voice = ctx.voice_client
+    
+        # If already connected and playing, stop playback cleanly
+        if voice and voice.is_connected():
+            if voice.is_playing():
+                voice.stop()
+    
+        # Reset queue and track
+        self.queue[guild_id] = []
+        self.current_track[guild_id] = None
+    
+        # Add each track to the queue like the play command would
+        for song_path in playlist:
+            if Path(song_path).is_file():
+                self.queue[guild_id].append(song_path)
+    
+        await ctx.send(f"▶️ Playing playlist `{name}` with `{len(playlist)}` tracks.")
+    
+        # Start the playback loop if it's not already active
+        if guild_id not in self.players or self.players[guild_id].done():
+            self.players[guild_id] = self.bot.loop.create_task(self._playback_loop(ctx))
+    
+        @playlist.command(name="delete")
+        async def playlist_delete(self, ctx: commands.Context, name: str):
+            """Delete a playlist."""
+            path = self._get_playlist_file(name)
+            if not path.exists():
+                await ctx.send(f"❌ Playlist `{name}` does not exist.")
+                return
+        
+            try:
+                path.unlink()
+                await ctx.send(f"🗑️ Deleted playlist `{name}`.")
+            except Exception as e:
+                await ctx.send(f"⚠️ Failed to delete playlist `{name}`: {e}")
 
     @playlist.command(name="remove")
     async def playlist_remove(self, ctx: commands.Context, name: str, *, track_name: str):
