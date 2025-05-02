@@ -1,5 +1,6 @@
 import discord
 import asyncio
+import json
 import random
 import re
 from pathlib import Path
@@ -16,6 +17,7 @@ def chunk_list(data, size):
     for i in range(0, len(data), size):
         yield data[i:i + size]
 
+
 class Jukebox(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -29,6 +31,9 @@ class Jukebox(commands.Cog):
         self.queue = {}       # guild_id: asyncio.Queue[str]
         self.players = {}     # guild_id: asyncio.Task
         self.current_track = {}  # guild_id: str
+        self.playlist_path = self.data_path / "playlists"
+        self.playlist_path.mkdir(parents=True, exist_ok=True)
+
 
     @commands.group(invoke_without_command=True)
     async def jukebox(self, ctx: commands.Context):
@@ -305,3 +310,104 @@ class Jukebox(commands.Cog):
     
         if guild_id not in self.players:
             self.players[guild_id] = self.bot.loop.create_task(self._playback_loop(ctx))
+    
+    def _get_playlist_file(self, name: str) -> Path:
+        safe_name = sanitize_filename(name.strip().lower())
+        return self.playlist_path / f"{safe_name}.json"
+    
+    def _load_playlist(self, name: str) -> list[str]:
+        path = self._get_playlist_file(name)
+        if not path.is_file():
+            return []
+        with open(path, "r") as f:
+            return json.load(f)
+    
+    def _save_playlist(self, name: str, songs: list[str]):
+        path = self._get_playlist_file(name)
+        with open(path, "w") as f:
+            json.dump(songs, f)
+
+    @jukebox.group(name="playlist")
+    async def playlist(self, ctx: commands.Context):
+        """Manage playlists."""
+        if ctx.invoked_subcommand is None:
+            await ctx.send_help()
+
+    @playlist.command(name="create")
+    async def playlist_create(self, ctx: commands.Context, name: str):
+        path = self._get_playlist_file(name)
+        if path.exists():
+            await ctx.send(f"❌ Playlist `{name}` already exists.")
+            return
+        self._save_playlist(name, [])
+        await ctx.send(f"✅ Created new playlist `{name}`.")
+
+    @playlist.command(name="add")
+    async def playlist_add(self, ctx: commands.Context, name: str, *, song_name: str):
+        song_path = self.library_path / f"{sanitize_filename(song_name)}.mp3"
+        if not song_path.exists():
+            await ctx.send(f"❌ Song `{song_name}` not found in the jukebox library.")
+            return
+    
+        playlist = self._load_playlist(name)
+        playlist.append(str(song_path))
+        self._save_playlist(name, playlist)
+        await ctx.send(f"✅ Added `{song_name}` to playlist `{name}`.")
+
+    @playlist.command(name="play")
+    async def playlist_play(self, ctx: commands.Context, name: str):
+        playlist = self._load_playlist(name)
+        if not playlist:
+            await ctx.send(f"❌ Playlist `{name}` is empty or does not exist.")
+            return
+    
+        guild_id = ctx.guild.id
+        if guild_id not in self.queue:
+            self.queue[guild_id] = asyncio.Queue()
+        else:
+            while not self.queue[guild_id].empty():
+                try:
+                    self.queue[guild_id].get_nowait()
+                    self.queue[guild_id].task_done()
+                except asyncio.QueueEmpty:
+                    break
+    
+        for track in playlist:
+            self.queue[guild_id].put_nowait(track)
+    
+        await ctx.send(f"▶️ Playing playlist `{name}` with `{len(playlist)}` tracks.")
+    
+        if guild_id not in self.players:
+            self.players[guild_id] = self.bot.loop.create_task(self._playback_loop(ctx))
+
+    @playlist.command(name="delete")
+    async def playlist_delete(self, ctx: commands.Context, name: str):
+        path = self._get_playlist_file(name)
+        if not path.exists():
+            await ctx.send(f"❌ Playlist `{name}` does not exist.")
+            return
+    
+        try:
+            path.unlink()
+            await ctx.send(f"🗑️ Deleted playlist `{name}`.")
+        except Exception as e:
+            await ctx.send(f"⚠️ Failed to delete playlist `{name}`: {e}")
+
+    @playlist.command(name="remove")
+    async def playlist_remove(self, ctx: commands.Context, name: str, *, track_name: str):
+        playlist = self._load_playlist(name)
+        if not playlist:
+            await ctx.send(f"❌ Playlist `{name}` is empty or does not exist.")
+            return
+    
+        # Match by sanitized stem
+        sanitized = sanitize_filename(track_name.strip().lower())
+        for i, path in enumerate(playlist):
+            if Path(path).stem.lower() == sanitized:
+                removed = playlist.pop(i)
+                self._save_playlist(name, playlist)
+                await ctx.send(f"❎ Removed `{Path(removed).stem}` from playlist `{name}`.")
+                return
+    
+        await ctx.send(f"❌ Track `{track_name}` not found in playlist `{name}`.")
+
