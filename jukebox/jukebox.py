@@ -364,17 +364,16 @@ class Jukebox(commands.Cog):
             return
     
         guild_id = ctx.guild.id
+    
+        # Overwrite the queue with a fresh copy of the playlist
         self.queue[guild_id] = playlist.copy()
-        
+        self.current_track[guild_id] = None
+    
         await ctx.send(f"▶️ Playing playlist `{name}` with `{len(playlist)}` tracks.")
-        
-        if guild_id not in self.players:
+    
+        # Start playback loop if not already running
+        if guild_id not in self.players or self.players[guild_id].done():
             self.players[guild_id] = self.bot.loop.create_task(self._playback_loop(ctx))
-        
-                await ctx.send(f"▶️ Playing playlist `{name}` with `{len(playlist)}` tracks.")
-            
-                if guild_id not in self.players:
-                    self.players[guild_id] = self.bot.loop.create_task(self._playback_loop(ctx))
 
     @playlist.command(name="delete")
     async def playlist_delete(self, ctx: commands.Context, name: str):
