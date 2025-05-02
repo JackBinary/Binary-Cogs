@@ -144,21 +144,29 @@ class Jukebox(commands.Cog):
     
                 entry = self.queue[guild_id].pop(0)
     
-                # Determine if entry is a seekable resume
-                if isinstance(entry, dict) and "path" in entry and "seek" in entry:
+                # Handle TTS flags and custom volume
+                is_tts = isinstance(entry, dict) and entry.get("tts", False)
+                volume_override = entry.get("volume") if isinstance(entry, dict) else None
+    
+                # Determine actual path and options
+                if isinstance(entry, dict) and "path" in entry:
                     song_path = entry["path"]
-                    seek_time = entry["seek"]
-                    ffmpeg_opts = {
-                        'before_options': f'-ss {seek_time}',
-                        'options': '-vn'
-                    }
+                    seek_time = entry.get("seek", 0)
+    
+                    ffmpeg_opts = {}
+                    if seek_time:
+                        ffmpeg_opts["before_options"] = f"-ss {seek_time}"
+                    ffmpeg_opts["options"] = "-vn"
+    
                     source = discord.FFmpegPCMAudio(song_path, **ffmpeg_opts)
                 else:
                     song_path = entry
                     source = discord.FFmpegPCMAudio(song_path)
     
                 self.current_track[guild_id] = song_path
-                volume = await self.config.guild(guild).volume()
+    
+                # Apply volume
+                volume = volume_override or await self.config.guild(guild).volume()
                 transformed = discord.PCMVolumeTransformer(source, volume=volume)
                 transformed._start_time = time.time()
     
@@ -170,13 +178,15 @@ class Jukebox(commands.Cog):
                     self.bot.loop.call_soon_threadsafe(playback_done.set)
     
                 voice.play(transformed, after=after_playing)
-                await ctx.send(f"🎵 Now playing: `{Path(song_path).stem}`")
+    
+                if not is_tts:
+                    await ctx.send(f"🎵 Now playing: `{Path(song_path).stem}`")
     
                 await playback_done.wait()
                 self.current_track[guild_id] = None
     
             except Exception as e:
-                # Optional: uncomment for debug
+                # Optionally log the error
                 # await ctx.send(f"⚠️ Playback error: {e}")
                 continue
 
@@ -447,39 +457,34 @@ class Jukebox(commands.Cog):
         current_track = self.current_track.get(guild_id)
         queue = self.queue.setdefault(guild_id, [])
     
-        # Estimate current playback position
+        # Estimate playback time
         current_pos = 0
         if voice.is_playing() and hasattr(voice.source, "_start_time"):
             current_pos = time.time() - voice.source._start_time
     
-        # Stop current audio
         if voice.is_playing():
             voice.stop()
     
-        # Generate TTS audio
+        # Generate TTS clip
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as f:
             gTTS(text).save(f.name)
             tts_path = f.name
     
-        # Build a special FFmpeg line for resuming music
-        resumed_track = None
+        # Insert TTS at front of queue, marked with `tts=True` and volume override
+        queue.insert(0, {
+            "path": tts_path,
+            "tts": True,
+            "volume": 1.0  # Force full volume
+        })
+    
+        # Resume music afterward, if interrupted
         if current_track:
-            seek_sec = int(current_pos)
-            resumed_track = {
+            queue.insert(1, {
                 "path": current_track,
-                "seek": seek_sec
-            }
+                "seek": int(current_pos)
+            })
+            self.current_track[guild_id] = None
     
-        # Insert TTS at the front of the queue
-        queue.insert(0, tts_path)
-    
-        # If there was an interrupted track, insert it after TTS
-        if resumed_track:
-            # Use a tuple to signal "resume this file at offset X"
-            queue.insert(1, resumed_track)
-            self.current_track[guild_id] = None  # allow loop to pick up the next track
-    
-        # Restart loop if needed
         if guild_id not in self.players or self.players[guild_id].done():
             self.players[guild_id] = self.bot.loop.create_task(self._playback_loop(ctx))
     
@@ -487,6 +492,7 @@ class Jukebox(commands.Cog):
             await ctx.message.add_reaction("🗣️")
         except discord.HTTPException:
             pass
+
         
 #    @jukebox.command(name="ttsvoice")
 #    async def ttsvoice(self, ctx: commands.Context, *, voice: Optional[str] = None):
