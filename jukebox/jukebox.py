@@ -459,55 +459,60 @@ class Jukebox(commands.Cog):
         
     @jukebox.command(name="say")
     async def say(self, ctx: commands.Context, *, text: str):
-        """Speak a TTS message without skipping the current track."""
+        """Speak a TTS message, then resume the current track from the same position."""
         voice = ctx.voice_client
         if not voice or not voice.is_connected():
             await ctx.send("I'm not in a voice channel.")
             return
     
         guild_id = ctx.guild.id
-        was_playing = voice.is_playing()
-        original_source = voice.source if was_playing else None
+        current_track = self.current_track.get(guild_id)
+        queue = self.queue.setdefault(guild_id, [])
     
-        # Pause current song
-        if was_playing:
-            voice.pause()
+        # Estimate current playback time
+        current_pos = 0
+        if voice.is_playing() and hasattr(voice.source, "_start_time"):
+            current_pos = time.time() - voice.source._start_time
     
-        # Get TTS voice (fallback if not set)
+        # Stop the current track
+        if voice.is_playing():
+            voice.stop()
+    
+        # Get the preferred voice or fallback
         tts_voice = await self.config.guild(ctx.guild).tts_voice()
         if not tts_voice:
             tts_voice = "en-US-AriaNeural"
     
-        # Generate TTS clip
+        # Generate TTS with edge-tts
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as f:
             tts_path = f.name
         communicate = edge_tts.Communicate(text, tts_voice)
         await communicate.save(tts_path)
     
-        # Play TTS
-        tts_done = asyncio.Event()
+        # Insert TTS at the front
+        queue.insert(0, {
+            "path": tts_path,
+            "tts": True,
+            "volume": 1.0  # Max volume override
+        })
     
-        def after_tts(error):
-            self.bot.loop.call_soon_threadsafe(tts_done.set)
+        # Reinsert interrupted track at the front
+        if current_track:
+            queue.insert(1, {
+                "path": current_track,
+                "seek": int(current_pos)
+            })
+            self.current_track[guild_id] = None
     
-        voice.play(discord.FFmpegPCMAudio(tts_path), after=after_tts)
-        await tts_done.wait()
-    
-        try:
-            os.remove(tts_path)
-        except Exception:
-            pass
-    
-        # Resume previous track
-        if was_playing and original_source:
-            voice.source = original_source
-            voice.resume()
+        # Ensure playback resumes
+        if guild_id not in self.players or self.players[guild_id].done():
+            self.players[guild_id] = self.bot.loop.create_task(self._playback_loop(ctx))
     
         try:
             await ctx.message.add_reaction("🗣️")
         except discord.HTTPException:
             pass
-        
+
     @jukebox.command(name="ttsvoice")
     async def ttsvoice(self, ctx: commands.Context, *, voice: Optional[str] = None):
         """Set or display the current TTS voice (e.g. en-US-AriaNeural)."""
