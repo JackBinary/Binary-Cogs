@@ -1,6 +1,7 @@
 import discord
 import asyncio
 import json
+import os
 import random
 import re
 import tempfile
@@ -407,37 +408,47 @@ class Jukebox(commands.Cog):
 
     @jukebox.command(name="say")
     async def say(self, ctx: commands.Context, *, text: str):
-        """Speak a message using TTS without clearing the music queue."""
+        """Speak a TTS message, pausing and resuming music playback."""
         voice = ctx.voice_client
         if not voice or not voice.is_connected():
             await ctx.send("I'm not in a voice channel.")
             return
     
-        # Pause current track if playing
+        # Pause music if needed
         was_playing = voice.is_playing()
         if was_playing:
             voice.pause()
     
-        # Generate TTS clip
+        # Generate temporary MP3 with gTTS
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as f:
             tts = gTTS(text)
             tts.save(f.name)
             tts_path = f.name
     
-        # Play TTS clip
+        # Play the TTS clip
         tts_done = asyncio.Event()
     
-        def after_speak(error):
+        def after_tts(error):
             if error:
                 print(f"TTS playback error: {error}")
             self.bot.loop.call_soon_threadsafe(tts_done.set)
     
-        voice.play(discord.FFmpegPCMAudio(tts_path), after=after_speak)
+        voice.play(discord.FFmpegPCMAudio(tts_path), after=after_tts)
         await tts_done.wait()
     
-        # Resume music
-        if was_playing:
+        # Clean up file
+        try:
+            os.remove(tts_path)
+        except Exception:
+            pass
+    
+        # Resume music if it was playing before
+        if was_playing and not voice.is_playing():
             voice.resume()
     
-        await ctx.send(f"🗣️ Said: `{text}`")
+        # React instead of replying
+        try:
+            await ctx.message.add_reaction("🗣️")
+        except discord.HTTPException:
+            pass
 
