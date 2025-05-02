@@ -8,6 +8,7 @@ import tempfile
 import time
 from pathlib import Path
 from typing import Optional
+from pydub.utils import mediainfo
 
 from redbot.core import commands, Config
 import edge_tts
@@ -457,6 +458,8 @@ class Jukebox(commands.Cog):
     
         await ctx.send(f"❌ Track `{track_name}` not found in playlist `{name}`.")
         
+
+
     @jukebox.command(name="say")
     async def say(self, ctx: commands.Context, *, text: str):
         """Speak a TTS message, then resume the current track from the same position."""
@@ -485,22 +488,27 @@ class Jukebox(commands.Cog):
         communicate = edge_tts.Communicate(text, tts_voice)
         await communicate.save(tts_path)
     
+        # Get duration of TTS audio (in seconds)
+        tts_info = mediainfo(tts_path)
+        tts_duration = float(tts_info["duration"]) if "duration" in tts_info else 0
+    
         # Insert TTS at the front
         queue.insert(0, {
             "path": tts_path,
             "tts": True,
-            "volume": 1.0  # Max volume override
+            "volume": 1.0
         })
     
-        # Reinsert interrupted track at the front
+        # Reinsert interrupted track with adjusted resume time
         if current_track:
+            resume_pos = int(current_pos + tts_duration)
             queue.insert(1, {
                 "path": current_track,
-                "seek": int(current_pos)
+                "seek": resume_pos
             })
             self.current_track[guild_id] = None
-
-        # Stop the current track
+    
+        # Stop the current track (now that we've queued the replacements)
         if voice.is_playing():
             voice.stop()
     
@@ -512,6 +520,7 @@ class Jukebox(commands.Cog):
             await ctx.message.add_reaction("🗣️")
         except discord.HTTPException:
             pass
+
 
     @jukebox.command(name="ttsvoice")
     async def ttsvoice(self, ctx: commands.Context, *, voice: Optional[str] = None):
