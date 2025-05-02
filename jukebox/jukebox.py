@@ -119,22 +119,28 @@ class Jukebox(commands.Cog):
 
         voice = ctx.voice_client or await channel.connect()
 
-        while not self.queue[guild_id].empty():
+        while True:
+            if self.queue[guild_id].empty():
+                await asyncio.sleep(2)
+                continue
+
             try:
                 song_path = await self.queue[guild_id].get()
                 volume = await self.config.guild(guild).volume()
 
                 source = discord.FFmpegPCMAudio(song_path)
                 voice.source = discord.PCMVolumeTransformer(source, volume=volume)
-                voice.play(voice.source)
+
+                try:
+                    voice.play(voice.source)
+                except Exception as e:
+                    await ctx.send(f"Error playing track: {e}")
+                    break
 
                 while voice.is_playing():
                     await asyncio.sleep(1)
             except Exception as e:
                 await ctx.send(f"Error playing track: {e}")
-
-        await asyncio.sleep(2)
-        del self.players[guild_id]
 
     @jukebox.command(name="volume")
     async def volume(self, ctx: commands.Context, value: Optional[float] = None):
@@ -171,13 +177,23 @@ class Jukebox(commands.Cog):
 
     @jukebox.command(name="stop")
     async def stop(self, ctx: commands.Context):
+        """Stop current track and clear the queue, but keep the bot ready for new tracks."""
         voice = ctx.voice_client
+        guild_id = ctx.guild.id
+
         if voice is None or not voice.is_connected():
             await ctx.send("I'm not in a voice channel.")
             return
 
         if voice.is_playing():
             voice.stop()
-            await ctx.send("⏹️ Stopped playback.")
-        else:
-            await ctx.send("I'm not playing anything right now.")
+
+        if guild_id in self.queue:
+            while not self.queue[guild_id].empty():
+                try:
+                    self.queue[guild_id].get_nowait()
+                    self.queue[guild_id].task_done()
+                except asyncio.QueueEmpty:
+                    break
+
+        await ctx.send("⏹️ Stopped playback and cleared the queue.")
