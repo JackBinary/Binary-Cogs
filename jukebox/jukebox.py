@@ -10,7 +10,8 @@ from pathlib import Path
 from typing import Optional
 
 from redbot.core import commands, Config
-import edge_tts
+# import edge_tts
+from gtts import gTTS
 
 DEFAULT_VOLUME = 1.0
 
@@ -432,35 +433,24 @@ class Jukebox(commands.Cog):
         guild_id = ctx.guild.id
         current_song = self.current_track.get(guild_id)
     
-        # Estimate playback position
-        original_source = voice.source
-        start_time = getattr(original_source, "_start_time", None)
-        current_position = time.time() - start_time if start_time else 0
+        # Estimate how long the track has been playing
+        current_position = 0
+        if voice.is_playing():
+            current_position = getattr(voice.source, "_start_time", time.time())  # fallback to now
+            current_position = time.time() - current_position
     
-        # Stop current track
+        # Stop music cleanly
         if voice.is_playing():
             voice.stop()
+            while voice.is_playing():
+                await asyncio.sleep(0.1)
     
-        # Wait until playback is truly stopped (source cleared)
-        for _ in range(20):  # up to 2 seconds max
-            if not voice.is_playing() and voice.source is None:
-                break
-            await asyncio.sleep(0.1)
-        else:
-            await ctx.send("⚠️ Failed to interrupt current playback cleanly.")
-            return
-    
-        # Get configured or default TTS voice
-        config_voice = await self.config.guild(ctx.guild).tts_voice()
-        if not config_voice:
-            config_voice = "en-US-AriaNeural"
-    
-        # Generate TTS audio
+        # Generate TTS clip
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as f:
+            gTTS(text, lang="en").save(f.name)
             tts_path = f.name
-        await edge_tts.Communicate(text, config_voice).save(tts_path)
     
-        # Play TTS audio
+        # Play TTS
         tts_done = asyncio.Event()
     
         def after_tts(error):
@@ -474,38 +464,40 @@ class Jukebox(commands.Cog):
         except Exception:
             pass
     
-        # Resume the track from saved position
+        # Resume music using FFmpeg -ss to seek
         if current_song:
+            seek_seconds = int(current_position)
+    
             ffmpeg_opts = {
-                'before_options': f"-ss {int(current_position)}",
+                'before_options': f"-ss {seek_seconds}",
                 'options': "-vn"
             }
     
-            resumed_source = discord.PCMVolumeTransformer(
+            new_source = discord.PCMVolumeTransformer(
                 discord.FFmpegPCMAudio(current_song, **ffmpeg_opts),
                 volume=await self.config.guild(ctx.guild).volume()
             )
-            resumed_source._start_time = time.time()
     
-            voice.play(resumed_source)
+            voice.play(new_source)
             self.current_track[guild_id] = current_song
     
+        # React to confirm
         try:
             await ctx.message.add_reaction("🗣️")
         except discord.HTTPException:
             pass
         
-    @jukebox.command(name="ttsvoice")
-    async def ttsvoice(self, ctx: commands.Context, *, voice: Optional[str] = None):
-        """Set or display the current TTS voice (e.g. en-US-AriaNeural)."""
-        if voice is None:
-            current = await self.config.guild(ctx.guild).tts_voice()
-            if current:
-                await ctx.send(f"🗣️ Current TTS voice: `{current}`")
-            else:
-                await ctx.send("⚠️ No TTS voice set. Default will be used.")
-            return
-    
-        # Optional: validate known voice list here
-        await self.config.guild(ctx.guild).tts_voice.set(voice)
-        await ctx.send(f"✅ TTS voice set to `{voice}`")
+#    @jukebox.command(name="ttsvoice")
+#    async def ttsvoice(self, ctx: commands.Context, *, voice: Optional[str] = None):
+#        """Set or display the current TTS voice (e.g. en-US-AriaNeural)."""
+#        if voice is None:
+#            current = await self.config.guild(ctx.guild).tts_voice()
+#            if current:
+#                await ctx.send(f"🗣️ Current TTS voice: `{current}`")
+#            else:
+#                await ctx.send("⚠️ No TTS voice set. Default will be used.")
+#            return
+#    
+#        # Optional: validate known voice list here
+#        await self.config.guild(ctx.guild).tts_voice.set(voice)
+#        await ctx.send(f"✅ TTS voice set to `{voice}`")
