@@ -49,7 +49,7 @@ class Jukebox(commands.Cog):
         await ctx.send(f"Added `{safe_name}` to the jukebox.")
 
     @jukebox.command(name="play")
-    async def play(self, ctx: commands.Context, name: Optional[str]):
+    async def play(self, ctx: commands.Context, *, name: Optional[str] = None):
         """Play a song by name, or list all songs if no name is given."""
         if not ctx.author.voice or not ctx.author.voice.channel:
             await ctx.send("Join a voice channel first.")
@@ -68,7 +68,13 @@ class Jukebox(commands.Cog):
             if voice.is_playing():
                 voice.stop()
 
-            voice.play(discord.FFmpegPCMAudio(str(song_path)), after=lambda e: print(f"Done: {e}"))
+            volume = await self.config.guild(ctx.guild).volume()
+            ffmpeg_options = f'-filter:a "volume={volume}"'
+            
+            voice.play(
+                discord.FFmpegPCMAudio(str(song_path), options=ffmpeg_options),
+                after=lambda e: print(f"Done: {e}")
+            )
             await ctx.send(f"Now playing `{safe_name}`.")
             self.current_vc[ctx.guild.id] = voice
 
@@ -128,3 +134,32 @@ class Jukebox(commands.Cog):
             await ctx.send(f"Removed `{safe_name}` from the jukebox.")
         except Exception as e:
             await ctx.send(f"Failed to remove `{safe_name}`: {e}")
+
+    @jukebox.command(name="volume")
+    async def volume(self, ctx: commands.Context, value: Optional[float] = None):
+        """Get or set the volume (0.0 to 2.0)."""
+        if value is None:
+            vol = await self.config.guild(ctx.guild).volume()
+            await ctx.send(f"🔊 Current volume: `{vol:.2f}`")
+            return
+    
+        if not (0.0 <= value <= 2.0):
+            await ctx.send("Please choose a volume between 0.0 and 2.0.")
+            return
+    
+        await self.config.guild(ctx.guild).volume.set(value)
+        await ctx.send(f"✅ Volume set to `{value:.2f}`")
+
+    @jukebox.command(name="stop")
+    async def stop(self, ctx: commands.Context):
+        """Stop the current track (but stay in voice)."""
+        voice = ctx.voice_client
+        if voice is None or not voice.is_connected():
+            await ctx.send("I'm not in a voice channel.")
+            return
+    
+        if voice.is_playing():
+            voice.stop()
+            await ctx.send("⏹️ Stopped playback.")
+        else:
+            await ctx.send("I'm not playing anything right now.")
