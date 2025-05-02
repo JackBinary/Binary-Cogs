@@ -358,33 +358,34 @@ class Jukebox(commands.Cog):
     @playlist.command(name="play")
     async def playlist_play(self, ctx: commands.Context, name: str):
         """Stop current playback and start playing a playlist."""
-        playlist = self._load_playlist(name)
-        if not playlist:
+        playlist_data = self._load_playlist(name)
+        if not playlist_data:
             await ctx.send(f"❌ Playlist `{name}` is empty or does not exist.")
             return
     
         guild_id = ctx.guild.id
         voice = ctx.voice_client
     
-        # If already connected and playing, stop playback cleanly
+        # Stop playback if necessary
         if voice and voice.is_connected():
             if voice.is_playing():
                 voice.stop()
     
-        # Reset queue and track
+        # Clear queue and track
         self.queue[guild_id] = []
         self.current_track[guild_id] = None
     
-        # Add each track to the queue like the play command would
-        for song_path in playlist:
+        # Add songs to queue
+        for song_path in playlist_data:
             if Path(song_path).is_file():
                 self.queue[guild_id].append(song_path)
     
-        await ctx.send(f"▶️ Playing playlist `{name}` with `{len(playlist)}` tracks.")
+        await ctx.send(f"▶️ Playing playlist `{name}` with `{len(playlist_data)}` tracks.")
     
-        # Start the playback loop if it's not already active
+        # Start the playback loop if not running
         if guild_id not in self.players or self.players[guild_id].done():
             self.players[guild_id] = self.bot.loop.create_task(self._playback_loop(ctx))
+
     
         @playlist.command(name="delete")
         async def playlist_delete(self, ctx: commands.Context, name: str):
