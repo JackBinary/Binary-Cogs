@@ -9,35 +9,31 @@ from redbot.core import commands, Config
 DEFAULT_VOLUME = 1.0
 
 def sanitize_filename(name: str) -> str:
-    """Replace illegal characters in filenames with underscores."""
     return re.sub(r'[\\/*?:"<>|]', '_', name)
 
 def chunk_list(data, size):
-    """Yield successive chunks from a list."""
     for i in range(0, len(data), size):
         yield data[i:i + size]
 
 class Jukebox(commands.Cog):
-    """A local jukebox for uploading and playing MP3s."""
-
     def __init__(self, bot):
         self.bot = bot
         self.data_path = Path(__file__).parent / "data"
         self.library_path = self.data_path / "jukebox_library"
         self.library_path.mkdir(parents=True, exist_ok=True)
-        self.current_vc = {}
 
         self.config = Config.get_conf(self, identifier=0xF00DCAFE, force_registration=True)
         self.config.register_guild(volume=DEFAULT_VOLUME)
 
+        self.queue = {}       # guild_id: asyncio.Queue[str]
+        self.players = {}     # guild_id: asyncio.Task
+
     @commands.group(invoke_without_command=True)
     async def jukebox(self, ctx: commands.Context):
-        """Base command for the Jukebox system."""
         await ctx.send_help()
 
     @jukebox.command(name="add")
     async def add(self, ctx: commands.Context, *, name: str):
-        """Upload an MP3 file to the jukebox with a given name."""
         if not ctx.message.attachments:
             await ctx.send("Attach an MP3 file to this message.")
             return
@@ -49,41 +45,16 @@ class Jukebox(commands.Cog):
 
         safe_name = sanitize_filename(name.strip())
         dest_path = self.library_path / f"{safe_name}.mp3"
-
         await attachment.save(dest_path)
         await ctx.send(f"Added `{safe_name}` to the jukebox.")
 
     @jukebox.command(name="play")
     async def play(self, ctx: commands.Context, *, name: Optional[str] = None):
-        """Play a song by name, or list all songs if no name is given."""
         if not ctx.author.voice or not ctx.author.voice.channel:
             await ctx.send("Join a voice channel first.")
             return
 
-        voice_channel = ctx.author.voice.channel
-
-        if name:
-            safe_name = sanitize_filename(name.strip())
-            song_path = self.library_path / f"{safe_name}.mp3"
-            if not song_path.is_file():
-                await ctx.send("Song not found.")
-                return
-
-            voice = ctx.voice_client or await voice_channel.connect()
-            if voice.is_playing():
-                voice.stop()
-
-            volume = await self.config.guild(ctx.guild).volume()
-            ffmpeg_options = f'-filter:a "volume={volume}"'
-
-            voice.play(
-                discord.FFmpegPCMAudio(str(song_path), options=ffmpeg_options),
-                after=lambda e: print(f"Done: {e}")
-            )
-            await ctx.send(f"Now playing `{safe_name}`.")
-            self.current_vc[ctx.guild.id] = voice
-
-        else:
+        if name is None:
             songs = sorted(f.stem for f in self.library_path.glob("*.mp3"))
             if not songs:
                 await ctx.send("The jukebox is empty.")
@@ -123,10 +94,68 @@ class Jukebox(commands.Cog):
                     await message.edit(content=format_page(current))
                 except asyncio.TimeoutError:
                     break
+            return
+
+        safe_name = sanitize_filename(name.strip())
+        song_path = self.library_path / f"{safe_name}.mp3"
+        if not song_path.is_file():
+            await ctx.send("Song not found.")
+            return
+
+        guild_id = ctx.guild.id
+        if guild_id not in self.queue:
+            self.queue[guild_id] = asyncio.Queue()
+
+        await self.queue[guild_id].put(str(song_path))
+        await ctx.send(f"🎶 Queued `{safe_name}`")
+
+        if guild_id not in self.players:
+            self.players[guild_id] = self.bot.loop.create_task(self._playback_loop(ctx))
+
+    async def _playback_loop(self, ctx: commands.Context):
+        guild = ctx.guild
+        guild_id = guild.id
+        channel = ctx.author.voice.channel
+
+        voice = ctx.voice_client or await channel.connect()
+
+        while not self.queue[guild_id].empty():
+            try:
+                song_path = await self.queue[guild_id].get()
+                volume = await self.config.guild(guild).volume()
+
+                source = discord.FFmpegPCMAudio(song_path)
+                voice.source = discord.PCMVolumeTransformer(source, volume=volume)
+                voice.play(voice.source)
+
+                while voice.is_playing():
+                    await asyncio.sleep(1)
+            except Exception as e:
+                await ctx.send(f"Error playing track: {e}")
+
+        await asyncio.sleep(2)
+        del self.players[guild_id]
+
+    @jukebox.command(name="volume")
+    async def volume(self, ctx: commands.Context, value: Optional[float] = None):
+        if value is None:
+            vol = await self.config.guild(ctx.guild).volume()
+            await ctx.send(f"🔊 Current volume: `{vol:.2f}`")
+            return
+
+        if not (0.0 <= value <= 2.0):
+            await ctx.send("Please choose a volume between 0.0 and 2.0.")
+            return
+
+        await self.config.guild(ctx.guild).volume.set(value)
+        vc = ctx.voice_client
+        if vc and vc.source and isinstance(vc.source, discord.PCMVolumeTransformer):
+            vc.source.volume = value
+
+        await ctx.send(f"✅ Volume set to `{value:.2f}`")
 
     @jukebox.command(name="remove")
     async def remove(self, ctx: commands.Context, *, name: str):
-        """Remove a song from the jukebox."""
         safe_name = sanitize_filename(name.strip())
         song_path = self.library_path / f"{safe_name}.mp3"
 
@@ -140,24 +169,8 @@ class Jukebox(commands.Cog):
         except Exception as e:
             await ctx.send(f"Failed to remove `{safe_name}`: {e}")
 
-    @jukebox.command(name="volume")
-    async def volume(self, ctx: commands.Context, value: Optional[float] = None):
-        """Get or set the volume (0.0 to 2.0)."""
-        if value is None:
-            vol = await self.config.guild(ctx.guild).volume()
-            await ctx.send(f"🔊 Current volume: `{vol:.2f}`")
-            return
-
-        if not (0.0 <= value <= 2.0):
-            await ctx.send("Please choose a volume between 0.0 and 2.0.")
-            return
-
-        await self.config.guild(ctx.guild).volume.set(value)
-        await ctx.send(f"✅ Volume set to `{value:.2f}`")
-
     @jukebox.command(name="stop")
     async def stop(self, ctx: commands.Context):
-        """Stop the current track (but stay in voice)."""
         voice = ctx.voice_client
         if voice is None or not voice.is_connected():
             await ctx.send("I'm not in a voice channel.")
