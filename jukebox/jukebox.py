@@ -1,5 +1,6 @@
 import discord
 import asyncio
+import random
 import re
 from pathlib import Path
 from typing import Optional
@@ -268,3 +269,26 @@ class Jukebox(commands.Cog):
                     await message.edit(content=format_page(current))
                 except asyncio.TimeoutError:
                     break
+
+    @jukebox.command(name="shuffle")
+    async def shuffle(self, ctx: commands.Context):
+        """Shuffle and queue all tracks from the jukebox library."""
+        guild_id = ctx.guild.id
+        songs = list(self.library_path.glob("*.mp3"))
+    
+        if not songs:
+            await ctx.send("📭 The jukebox library is empty.")
+            return
+    
+        random.shuffle(songs)
+    
+        if guild_id not in self.queue:
+            self.queue[guild_id] = asyncio.Queue()
+    
+        for song in songs:
+            await self.queue[guild_id].put(str(song))
+    
+        await ctx.send(f"🔀 Queued `{len(songs)}` songs in random order.")
+    
+        if guild_id not in self.players:
+            self.players[guild_id] = self.bot.loop.create_task(self._playback_loop(ctx))
