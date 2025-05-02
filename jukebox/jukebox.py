@@ -30,6 +30,7 @@ class Jukebox(commands.Cog):
         self.library_path.mkdir(parents=True, exist_ok=True)
 
         self.config = Config.get_conf(self, identifier=0xF00DCAFE, force_registration=True)
+        self.config.register_guild(tts_voice="en-US-AriaNeural")
         self.config.register_guild(volume=DEFAULT_VOLUME)
 
         self.queue = {}       # guild_id: asyncio.Queue[str]
