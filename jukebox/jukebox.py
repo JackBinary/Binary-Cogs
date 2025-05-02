@@ -7,6 +7,12 @@ import discord
 import asyncio
 from typing import Optional
 
+import re
+
+def sanitize_filename(name: str) -> str:
+    # Replace invalid characters with underscore
+    return re.sub(r'[\\/*?:"<>|]', '_', name)
+
 class Jukebox(commands.Cog):
     """A local jukebox for uploading and playing MP3s."""
 
@@ -24,20 +30,21 @@ class Jukebox(commands.Cog):
             await ctx.send_help()
 
     @jukebox.command(name="add")
-    async def add(self, ctx: commands.Context, name: str):
+    async def add(self, ctx: commands.Context, *, name: str):
         """Upload an MP3 file to the jukebox with a given name."""
         if not ctx.message.attachments:
             await ctx.send("Attach an MP3 file to this message.")
             return
-
+    
         attachment = ctx.message.attachments[0]
         if not attachment.filename.lower().endswith(".mp3"):
             await ctx.send("Only MP3 files are supported.")
             return
-
-        dest_path = os.path.join(self.library_path, f"{name}.mp3")
+    
+        safe_name = sanitize_filename(name.strip())
+        dest_path = self.library_path / f"{safe_name}.mp3"
         await attachment.save(dest_path)
-        await ctx.send(f"Added `{name}` to the jukebox.")
+        await ctx.send(f"Added `{safe_name}` to the jukebox.")
 
     @jukebox.command(name="play")
     async def play(self, ctx: commands.Context, name: Optional[str]):
