@@ -125,47 +125,61 @@ class Jukebox(commands.Cog):
             self.players[guild_id] = self.bot.loop.create_task(self._playback_loop(ctx))
     
     async def _playback_loop(self, ctx: commands.Context):
-        guild = ctx.guild
-        guild_id = guild.id
-        channel = ctx.author.voice.channel
-    
-        voice = ctx.voice_client or await channel.connect()
-    
-        while True:
-            try:
-                if len(voice.channel.members) <= 1:
-                    await ctx.send("Voice channel is empty. Disconnecting.")
-                    await voice.disconnect()
-                    break
-    
-                if not self.queue.get(guild_id):
-                    await asyncio.sleep(1)
-                    continue
-    
-                song_path = self.queue[guild_id].pop(0)
-                self.current_track[guild_id] = song_path
-    
-                volume = await self.config.guild(guild).volume()
-                source = discord.FFmpegPCMAudio(song_path)
-                transformed = discord.PCMVolumeTransformer(source, volume=volume)
-    
-                playback_done = asyncio.Event()
-    
-                def after_playing(error):
-                    if error:
-                        print(f"Playback error: {error}")
-                    self.bot.loop.call_soon_threadsafe(playback_done.set)
-    
-                voice.play(transformed, after=after_playing)
-                voice.source._start_time = time.time()
-                await ctx.send(f"🎵 Now playing: `{Path(song_path).stem}`")
-    
-                await playback_done.wait()
-                self.current_track[guild_id] = None
-    
-            except Exception as e:
-                # await ctx.send(f"⚠️ Playback error: {e}")
+    guild = ctx.guild
+    guild_id = guild.id
+    channel = ctx.author.voice.channel
+
+    voice = ctx.voice_client or await channel.connect()
+
+    while True:
+        try:
+            if len(voice.channel.members) <= 1:
+                await ctx.send("Voice channel is empty. Disconnecting.")
+                await voice.disconnect()
+                break
+
+            if not self.queue.get(guild_id):
+                await asyncio.sleep(1)
                 continue
+
+            entry = self.queue[guild_id].pop(0)
+
+            # Determine if entry is a seekable resume
+            if isinstance(entry, dict) and "path" in entry and "seek" in entry:
+                song_path = entry["path"]
+                seek_time = entry["seek"]
+                ffmpeg_opts = {
+                    'before_options': f'-ss {seek_time}',
+                    'options': '-vn'
+                }
+                source = discord.FFmpegPCMAudio(song_path, **ffmpeg_opts)
+            else:
+                song_path = entry
+                source = discord.FFmpegPCMAudio(song_path)
+
+            self.current_track[guild_id] = song_path
+            volume = await self.config.guild(guild).volume()
+            transformed = discord.PCMVolumeTransformer(source, volume=volume)
+            transformed._start_time = time.time()
+
+            playback_done = asyncio.Event()
+
+            def after_playing(error):
+                if error:
+                    print(f"Playback error: {error}")
+                self.bot.loop.call_soon_threadsafe(playback_done.set)
+
+            voice.play(transformed, after=after_playing)
+            await ctx.send(f"🎵 Now playing: `{Path(song_path).stem}`")
+
+            await playback_done.wait()
+            self.current_track[guild_id] = None
+
+        except Exception as e:
+            # Optional: uncomment for debug
+            # await ctx.send(f"⚠️ Playback error: {e}")
+            continue
+
 
     @jukebox.command(name="volume")
     async def volume(self, ctx: commands.Context, value: Optional[float] = None):
@@ -424,64 +438,52 @@ class Jukebox(commands.Cog):
         
     @jukebox.command(name="say")
     async def say(self, ctx: commands.Context, *, text: str):
-        """Speak a TTS message, restarting the current song from the same timestamp after."""
+        """Speak a TTS message, then resume the current track from the same position."""
         voice = ctx.voice_client
         if not voice or not voice.is_connected():
             await ctx.send("I'm not in a voice channel.")
             return
     
         guild_id = ctx.guild.id
-        current_song = self.current_track.get(guild_id)
+        current_track = self.current_track.get(guild_id)
+        queue = self.queue.setdefault(guild_id, [])
     
-        # Estimate how long the track has been playing
-        current_position = 0
-        if voice.is_playing():
-            current_position = getattr(voice.source, "_start_time", time.time())  # fallback to now
-            current_position = time.time() - current_position
+        # Estimate current playback position
+        current_pos = 0
+        if voice.is_playing() and hasattr(voice.source, "_start_time"):
+            current_pos = time.time() - voice.source._start_time
     
-        # Stop music cleanly
+        # Stop current audio
         if voice.is_playing():
             voice.stop()
-            while voice.is_playing():
-                await asyncio.sleep(0.1)
     
-        # Generate TTS clip
+        # Generate TTS audio
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as f:
-            gTTS(text, lang="en").save(f.name)
+            gTTS(text).save(f.name)
             tts_path = f.name
     
-        # Play TTS
-        tts_done = asyncio.Event()
-    
-        def after_tts(error):
-            self.bot.loop.call_soon_threadsafe(tts_done.set)
-    
-        voice.play(discord.FFmpegPCMAudio(tts_path), after=after_tts)
-        await tts_done.wait()
-    
-        try:
-            os.remove(tts_path)
-        except Exception:
-            pass
-    
-        # Resume music using FFmpeg -ss to seek
-        if current_song:
-            seek_seconds = int(current_position)
-    
-            ffmpeg_opts = {
-                'before_options': f"-ss {seek_seconds}",
-                'options': "-vn"
+        # Build a special FFmpeg line for resuming music
+        resumed_track = None
+        if current_track:
+            seek_sec = int(current_pos)
+            resumed_track = {
+                "path": current_track,
+                "seek": seek_sec
             }
     
-            new_source = discord.PCMVolumeTransformer(
-                discord.FFmpegPCMAudio(current_song, **ffmpeg_opts),
-                volume=await self.config.guild(ctx.guild).volume()
-            )
+        # Insert TTS at the front of the queue
+        queue.insert(0, tts_path)
     
-            voice.play(new_source)
-            self.current_track[guild_id] = current_song
+        # If there was an interrupted track, insert it after TTS
+        if resumed_track:
+            # Use a tuple to signal "resume this file at offset X"
+            queue.insert(1, resumed_track)
+            self.current_track[guild_id] = None  # allow loop to pick up the next track
     
-        # React to confirm
+        # Restart loop if needed
+        if guild_id not in self.players or self.players[guild_id].done():
+            self.players[guild_id] = self.bot.loop.create_task(self._playback_loop(ctx))
+    
         try:
             await ctx.message.add_reaction("🗣️")
         except discord.HTTPException:
