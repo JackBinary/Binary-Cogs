@@ -4,7 +4,9 @@ import re
 from pathlib import Path
 from typing import Optional
 
-from redbot.core import commands
+from redbot.core import commands, Config
+
+DEFAULT_VOLUME = 1.0
 
 def sanitize_filename(name: str) -> str:
     """Replace illegal characters in filenames with underscores."""
@@ -26,8 +28,7 @@ class Jukebox(commands.Cog):
         self.current_vc = {}
 
         self.config = Config.get_conf(self, identifier=0xF00DCAFE, force_registration=True)
-        self.config.register_guild(volume=1.0)
-
+        self.config.register_guild(volume=DEFAULT_VOLUME)
 
     @commands.group(invoke_without_command=True)
     async def jukebox(self, ctx: commands.Context):
@@ -74,7 +75,7 @@ class Jukebox(commands.Cog):
 
             volume = await self.config.guild(ctx.guild).volume()
             ffmpeg_options = f'-filter:a "volume={volume}"'
-            
+
             voice.play(
                 discord.FFmpegPCMAudio(str(song_path), options=ffmpeg_options),
                 after=lambda e: print(f"Done: {e}")
@@ -112,7 +113,7 @@ class Jukebox(commands.Cog):
                     try:
                         await message.remove_reaction(reaction, user)
                     except discord.Forbidden:
-                        pass  # Ignore if bot can't remove reaction
+                        pass
 
                     if str(reaction.emoji) == "⬅️" and current > 0:
                         current -= 1
@@ -122,17 +123,17 @@ class Jukebox(commands.Cog):
                     await message.edit(content=format_page(current))
                 except asyncio.TimeoutError:
                     break
-    
+
     @jukebox.command(name="remove")
     async def remove(self, ctx: commands.Context, *, name: str):
         """Remove a song from the jukebox."""
         safe_name = sanitize_filename(name.strip())
         song_path = self.library_path / f"{safe_name}.mp3"
-    
+
         if not song_path.is_file():
             await ctx.send(f"Song `{safe_name}` not found in the jukebox.")
             return
-    
+
         try:
             song_path.unlink()
             await ctx.send(f"Removed `{safe_name}` from the jukebox.")
@@ -146,11 +147,11 @@ class Jukebox(commands.Cog):
             vol = await self.config.guild(ctx.guild).volume()
             await ctx.send(f"🔊 Current volume: `{vol:.2f}`")
             return
-    
+
         if not (0.0 <= value <= 2.0):
             await ctx.send("Please choose a volume between 0.0 and 2.0.")
             return
-    
+
         await self.config.guild(ctx.guild).volume.set(value)
         await ctx.send(f"✅ Volume set to `{value:.2f}`")
 
@@ -161,7 +162,7 @@ class Jukebox(commands.Cog):
         if voice is None or not voice.is_connected():
             await ctx.send("I'm not in a voice channel.")
             return
-    
+
         if voice.is_playing():
             voice.stop()
             await ctx.send("⏹️ Stopped playback.")
