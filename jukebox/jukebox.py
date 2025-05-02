@@ -446,7 +446,7 @@ class Jukebox(commands.Cog):
     
         # Generate TTS clip
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as f:
-            gTTS(text).save(f.name)
+            gTTS(text, lang="en").save(f.name)
             tts_path = f.name
     
         # Play TTS
