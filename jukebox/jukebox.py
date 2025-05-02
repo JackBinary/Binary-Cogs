@@ -405,7 +405,7 @@ class Jukebox(commands.Cog):
                 return
     
         await ctx.send(f"❌ Track `{track_name}` not found in playlist `{name}`.")
-
+        
     @jukebox.command(name="say")
     async def say(self, ctx: commands.Context, *, text: str):
         """Speak a TTS message, pausing and resuming music playback."""
@@ -414,31 +414,37 @@ class Jukebox(commands.Cog):
             await ctx.send("I'm not in a voice channel.")
             return
     
+        # Store current music stream and pause it
         was_playing = voice.is_playing()
-    
+        original_source = voice.source if was_playing else None
         if was_playing:
             voice.pause()
     
-        # Generate temporary TTS file
+        # Generate TTS file
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as f:
             gTTS(text).save(f.name)
             tts_path = f.name
     
-        # Play the TTS audio
-        voice.play(discord.FFmpegPCMAudio(tts_path))
+        # Play TTS
+        done = asyncio.Event()
     
-        # Wait until TTS is finished
-        while voice.is_playing():
-            await asyncio.sleep(0.25)
+        def after_play(error):
+            if error:
+                print(f"TTS playback error: {error}")
+            self.bot.loop.call_soon_threadsafe(done.set)
     
-        # Clean up the temporary file
+        voice.play(discord.FFmpegPCMAudio(tts_path), after=after_play)
+        await done.wait()
+    
+        # Clean up
         try:
             os.remove(tts_path)
         except Exception:
             pass
     
-        # Resume music if it was paused
-        if was_playing and not voice.is_playing():
+        # Resume music by re-assigning and resuming source
+        if original_source:
+            voice.source = original_source
             voice.resume()
     
         # React to confirm
