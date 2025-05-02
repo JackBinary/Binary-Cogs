@@ -28,6 +28,7 @@ class Jukebox(commands.Cog):
 
         self.queue = {}       # guild_id: asyncio.Queue[str]
         self.players = {}     # guild_id: asyncio.Task
+        self.current_track = {}  # guild_id: str
 
     @commands.group(invoke_without_command=True)
     async def jukebox(self, ctx: commands.Context):
@@ -129,6 +130,7 @@ class Jukebox(commands.Cog):
                     break
     
                 song_path = await self.queue[guild_id].get()
+                self.current_track[guild_id] = song_path
                 if song_path is None:
                     continue  # Just skip if a null token was inserted (stop doesn't kill the loop)
     
@@ -147,6 +149,7 @@ class Jukebox(commands.Cog):
                 await ctx.send(f"🎵 Now playing: `{Path(song_path).stem}`")
     
                 await playback_done.wait()
+                self.current_track[guild_id] = None
     
             except Exception as e:
                 await ctx.send(f"⚠️ Playback error: {e}")
@@ -224,22 +227,32 @@ class Jukebox(commands.Cog):
 
     @jukebox.command(name="queue")
     async def queue(self, ctx: commands.Context):
-        """Display the current jukebox queue."""
+        """Display the currently playing track and the rest of the queue."""
         guild_id = ctx.guild.id
     
-        if guild_id not in self.queue or self.queue[guild_id].empty():
-            await ctx.send("📭 The queue is currently empty.")
+        now_playing = None
+        if guild_id in self.current_track and self.current_track[guild_id]:
+            now_playing = Path(self.current_track[guild_id]).stem
+    
+        queue_entries = []
+        if guild_id in self.queue:
+            queue_entries = list(self.queue[guild_id]._queue)
+    
+        if not now_playing and not queue_entries:
+            await ctx.send("📭 Nothing is currently playing and the queue is empty.")
             return
     
-        # Extract queued items non-destructively
-        queue_list = list(self.queue[guild_id]._queue)
-        pages = list(chunk_list(queue_list, 10))
+        pages = list(chunk_list(queue_entries, 10))
         current = 0
     
         def format_page(index):
-            entries = pages[index]
-            lines = "\n".join(f"`{Path(track).stem}`" for track in entries)
-            return f"🎶 **Queued Songs** (Page {index + 1}/{len(pages)})\n{lines}"
+            lines = []
+            if now_playing:
+                lines.append(f"▶️ **Now Playing:** `{now_playing}`")
+            if queue_entries:
+                lines.append("🎶 **Up Next:**")
+                lines.extend(f"`{Path(track).stem}`" for track in pages[index])
+            return f"**Jukebox Queue** (Page {index + 1}/{len(pages)})\n" + "\n".join(lines)
     
         message = await ctx.send(format_page(current))
         if len(pages) > 1:
