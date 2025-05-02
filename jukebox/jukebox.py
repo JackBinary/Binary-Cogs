@@ -41,6 +41,7 @@ class Jukebox(commands.Cog):
 
     @jukebox.command(name="add")
     async def add(self, ctx: commands.Context, *, name: str):
+        """Upload an MP3 file to the bot to add to the library."""
         if not ctx.message.attachments:
             await ctx.send("Attach an MP3 file to this message.")
             return
@@ -57,7 +58,7 @@ class Jukebox(commands.Cog):
 
     @jukebox.command(name="play")
     async def play(self, ctx: commands.Context, *, name: Optional[str] = None):
-        """Upload an MP3 file to the bot to add to the library."""
+        """Add a track from the library to the current queue."""
         if not ctx.author.voice or not ctx.author.voice.channel:
             await ctx.send("Join a voice channel first.")
             return
