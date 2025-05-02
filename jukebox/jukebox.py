@@ -25,6 +25,10 @@ class Jukebox(commands.Cog):
         self.library_path.mkdir(parents=True, exist_ok=True)
         self.current_vc = {}
 
+        self.config = Config.get_conf(self, identifier=0xF00DCAFE, force_registration=True)
+        self.config.register_guild(volume=1.0)
+
+
     @commands.group(invoke_without_command=True)
     async def jukebox(self, ctx: commands.Context):
         """Base command for the Jukebox system."""
