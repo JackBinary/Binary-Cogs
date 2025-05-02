@@ -387,19 +387,19 @@ class Jukebox(commands.Cog):
             self.players[guild_id] = self.bot.loop.create_task(self._playback_loop(ctx))
 
     
-        @playlist.command(name="delete")
-        async def playlist_delete(self, ctx: commands.Context, name: str):
-            """Delete a playlist."""
-            path = self._get_playlist_file(name)
-            if not path.exists():
-                await ctx.send(f"❌ Playlist `{name}` does not exist.")
-                return
-        
-            try:
-                path.unlink()
-                await ctx.send(f"🗑️ Deleted playlist `{name}`.")
-            except Exception as e:
-                await ctx.send(f"⚠️ Failed to delete playlist `{name}`: {e}")
+    @playlist.command(name="delete")
+    async def playlist_delete(self, ctx: commands.Context, name: str):
+        """Delete a playlist."""
+        path = self._get_playlist_file(name)
+        if not path.exists():
+            await ctx.send(f"❌ Playlist `{name}` does not exist.")
+            return
+    
+        try:
+            path.unlink()
+            await ctx.send(f"🗑️ Deleted playlist `{name}`.")
+        except Exception as e:
+            await ctx.send(f"⚠️ Failed to delete playlist `{name}`: {e}")
 
     @playlist.command(name="remove")
     async def playlist_remove(self, ctx: commands.Context, name: str, *, track_name: str):
