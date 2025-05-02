@@ -10,8 +10,8 @@ from pathlib import Path
 from typing import Optional
 
 from redbot.core import commands, Config
-# import edge_tts
-from gtts import gTTS
+import edge_tts
+# from gtts import gTTS
 
 DEFAULT_VOLUME = 1.0
 
@@ -469,7 +469,7 @@ class Jukebox(commands.Cog):
         current_track = self.current_track.get(guild_id)
         queue = self.queue.setdefault(guild_id, [])
     
-        # Estimate playback time
+        # Estimate current playback time
         current_pos = 0
         if voice.is_playing() and hasattr(voice.source, "_start_time"):
             current_pos = time.time() - voice.source._start_time
@@ -477,19 +477,25 @@ class Jukebox(commands.Cog):
         if voice.is_playing():
             voice.stop()
     
-        # Generate TTS clip
+        # Get TTS voice (fallback if not set)
+        tts_voice = await self.config.guild(ctx.guild).tts_voice()
+        if not tts_voice:
+            tts_voice = "en-US-AriaNeural"
+    
+        # Generate TTS with edge-tts
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as f:
-            gTTS(text).save(f.name)
             tts_path = f.name
+        communicate = edge_tts.Communicate(text, tts_voice)
+        await communicate.save(tts_path)
     
         # Insert TTS at front of queue, marked with `tts=True` and volume override
         queue.insert(0, {
             "path": tts_path,
             "tts": True,
-            "volume": 1.0  # Force full volume
+            "volume": 1.0
         })
     
-        # Resume music afterward, if interrupted
+        # Reinsert interrupted music track
         if current_track:
             queue.insert(1, {
                 "path": current_track,
@@ -497,6 +503,7 @@ class Jukebox(commands.Cog):
             })
             self.current_track[guild_id] = None
     
+        # Start playback loop if needed
         if guild_id not in self.players or self.players[guild_id].done():
             self.players[guild_id] = self.bot.loop.create_task(self._playback_loop(ctx))
     
@@ -504,19 +511,17 @@ class Jukebox(commands.Cog):
             await ctx.message.add_reaction("🗣️")
         except discord.HTTPException:
             pass
-
         
-#    @jukebox.command(name="ttsvoice")
-#    async def ttsvoice(self, ctx: commands.Context, *, voice: Optional[str] = None):
-#        """Set or display the current TTS voice (e.g. en-US-AriaNeural)."""
-#        if voice is None:
-#            current = await self.config.guild(ctx.guild).tts_voice()
-#            if current:
-#                await ctx.send(f"🗣️ Current TTS voice: `{current}`")
-#            else:
-#                await ctx.send("⚠️ No TTS voice set. Default will be used.")
-#            return
-#    
-#        # Optional: validate known voice list here
-#        await self.config.guild(ctx.guild).tts_voice.set(voice)
-#        await ctx.send(f"✅ TTS voice set to `{voice}`")
+    @jukebox.command(name="ttsvoice")
+    async def ttsvoice(self, ctx: commands.Context, *, voice: Optional[str] = None):
+        """Set or display the current TTS voice (e.g. en-US-AriaNeural)."""
+        if voice is None:
+            current = await self.config.guild(ctx.guild).tts_voice()
+            if current:
+                await ctx.send(f"🗣️ Current TTS voice: `{current}`")
+            else:
+                await ctx.send("⚠️ No TTS voice set. Default will be used.")
+            return
+
+        await self.config.guild(ctx.guild).tts_voice.set(voice)
+        await ctx.send(f"✅ TTS voice set to `{voice}`")
