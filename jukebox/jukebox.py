@@ -57,6 +57,7 @@ class Jukebox(commands.Cog):
 
     @jukebox.command(name="play")
     async def play(self, ctx: commands.Context, *, name: Optional[str] = None):
+        """Upload an MP3 file to the bot to add to the library."""
         if not ctx.author.voice or not ctx.author.voice.channel:
             await ctx.send("Join a voice channel first.")
             return
@@ -162,6 +163,7 @@ class Jukebox(commands.Cog):
 
     @jukebox.command(name="volume")
     async def volume(self, ctx: commands.Context, value: Optional[float] = None):
+        """Change the playback volume."""
         if value is None:
             vol = await self.config.guild(ctx.guild).volume()
             await ctx.send(f"🔊 Current volume: `{vol:.2f}`")
@@ -180,6 +182,7 @@ class Jukebox(commands.Cog):
 
     @jukebox.command(name="remove")
     async def remove(self, ctx: commands.Context, *, name: str):
+        """remove a file from the library."""
         safe_name = sanitize_filename(name.strip())
         song_path = self.library_path / f"{safe_name}.mp3"
 
@@ -195,6 +198,7 @@ class Jukebox(commands.Cog):
 
     @jukebox.command(name="stop")
     async def stop(self, ctx: commands.Context):
+        """Stop all music playback"""
         voice = ctx.voice_client
         guild_id = ctx.guild.id
     
@@ -335,6 +339,7 @@ class Jukebox(commands.Cog):
 
     @playlist.command(name="create")
     async def playlist_create(self, ctx: commands.Context, name: str):
+        """Create a new playlist."""
         path = self._get_playlist_file(name)
         if path.exists():
             await ctx.send(f"❌ Playlist `{name}` already exists.")
@@ -344,6 +349,7 @@ class Jukebox(commands.Cog):
 
     @playlist.command(name="add")
     async def playlist_add(self, ctx: commands.Context, name: str, *, song_name: str):
+        """Add a new track to a playlist from the library."""
         song_path = self.library_path / f"{sanitize_filename(song_name)}.mp3"
         if not song_path.exists():
             await ctx.send(f"❌ Song `{song_name}` not found in the jukebox library.")
@@ -356,6 +362,7 @@ class Jukebox(commands.Cog):
 
     @playlist.command(name="play")
     async def playlist_play(self, ctx: commands.Context, name: str):
+        """Overwrite the current queue with a playlist."""
         playlist = self._load_playlist(name)
         if not playlist:
             await ctx.send(f"❌ Playlist `{name}` is empty or does not exist.")
@@ -382,6 +389,7 @@ class Jukebox(commands.Cog):
 
     @playlist.command(name="delete")
     async def playlist_delete(self, ctx: commands.Context, name: str):
+        """Delete a playlist."""
         path = self._get_playlist_file(name)
         if not path.exists():
             await ctx.send(f"❌ Playlist `{name}` does not exist.")
@@ -395,6 +403,7 @@ class Jukebox(commands.Cog):
 
     @playlist.command(name="remove")
     async def playlist_remove(self, ctx: commands.Context, name: str, *, track_name: str):
+        """Remove a track from a playlist."""
         playlist = self._load_playlist(name)
         if not playlist:
             await ctx.send(f"❌ Playlist `{name}` is empty or does not exist.")
