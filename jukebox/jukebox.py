@@ -140,13 +140,7 @@ class Jukebox(commands.Cog):
         voice = ctx.voice_client or await channel.connect()
     
         while True:
-            try:
-                # Disconnect if bot is alone
-                if len(voice.channel.members) <= 1:
-                    await ctx.send("Voice channel is empty. Disconnecting.")
-                    await voice.disconnect()
-                    break
-    
+            try:    
                 if not self.queue.get(guild_id):
                     await asyncio.sleep(1)
                     continue
