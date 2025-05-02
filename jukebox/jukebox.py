@@ -304,11 +304,6 @@ class Jukebox(commands.Cog):
         
         if guild_id not in self.players:
             self.players[guild_id] = self.bot.loop.create_task(self._playback_loop(ctx))
-        
-        await ctx.send(f"🔀 Queued `{len(songs)}` songs in random order.")
-    
-        if guild_id not in self.players:
-            self.players[guild_id] = self.bot.loop.create_task(self._playback_loop(ctx))
     
     def _get_playlist_file(self, name: str) -> Path:
         safe_name = sanitize_filename(name.strip().lower())
