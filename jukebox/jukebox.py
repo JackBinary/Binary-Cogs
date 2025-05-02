@@ -1,17 +1,19 @@
 import discord
-import os
-from redbot.core import commands, Config
-from redbot.core.utils.chat_formatting import pagify
-from pathlib import Path
-import discord
 import asyncio
+import re
+from pathlib import Path
 from typing import Optional
 
-import re
+from redbot.core import commands
 
 def sanitize_filename(name: str) -> str:
-    # Replace invalid characters with underscore
+    """Replace illegal characters in filenames with underscores."""
     return re.sub(r'[\\/*?:"<>|]', '_', name)
+
+def chunk_list(data, size):
+    """Yield successive chunks from a list."""
+    for i in range(0, len(data), size):
+        yield data[i:i + size]
 
 class Jukebox(commands.Cog):
     """A local jukebox for uploading and playing MP3s."""
@@ -26,8 +28,7 @@ class Jukebox(commands.Cog):
     @commands.group(invoke_without_command=True)
     async def jukebox(self, ctx: commands.Context):
         """Base command for the Jukebox system."""
-        if ctx.invoked_subcommand is None:
-            await ctx.send_help()
+        await ctx.send_help()
 
     @jukebox.command(name="add")
     async def add(self, ctx: commands.Context, *, name: str):
@@ -35,14 +36,15 @@ class Jukebox(commands.Cog):
         if not ctx.message.attachments:
             await ctx.send("Attach an MP3 file to this message.")
             return
-    
+
         attachment = ctx.message.attachments[0]
         if not attachment.filename.lower().endswith(".mp3"):
             await ctx.send("Only MP3 files are supported.")
             return
-    
+
         safe_name = sanitize_filename(name.strip())
         dest_path = self.library_path / f"{safe_name}.mp3"
+
         await attachment.save(dest_path)
         await ctx.send(f"Added `{safe_name}` to the jukebox.")
 
@@ -53,47 +55,60 @@ class Jukebox(commands.Cog):
             await ctx.send("Join a voice channel first.")
             return
 
-        vc = ctx.author.voice.channel
+        voice_channel = ctx.author.voice.channel
 
         if name:
-            song_path = os.path.join(self.library_path, f"{name}.mp3")
-            if not os.path.isfile(song_path):
+            safe_name = sanitize_filename(name.strip())
+            song_path = self.library_path / f"{safe_name}.mp3"
+            if not song_path.is_file():
                 await ctx.send("Song not found.")
                 return
 
-            voice = ctx.voice_client or await vc.connect()
+            voice = ctx.voice_client or await voice_channel.connect()
             if voice.is_playing():
                 voice.stop()
 
-            voice.play(discord.FFmpegPCMAudio(song_path), after=lambda e: print(f"Done: {e}"))
-            await ctx.send(f"Now playing `{name}`.")
+            voice.play(discord.FFmpegPCMAudio(str(song_path)), after=lambda e: print(f"Done: {e}"))
+            await ctx.send(f"Now playing `{safe_name}`.")
             self.current_vc[ctx.guild.id] = voice
+
         else:
-            songs = [f[:-4] for f in os.listdir(self.library_path) if f.endswith(".mp3")]
+            songs = sorted(f.stem for f in self.library_path.glob("*.mp3"))
             if not songs:
                 await ctx.send("The jukebox is empty.")
                 return
 
-            pages = list(pagify("\n".join(f"`{song}`" for song in songs), delims=["\n"], page_length=10))
+            pages = list(chunk_list(songs, 10))
             current = 0
-            message = await ctx.send(f"**Songs in Jukebox**\n{pages[current]}")
 
+            def format_page(index):
+                lines = "\n".join(f"`{title}`" for title in pages[index])
+                return f"**Songs in Jukebox** (Page {index + 1}/{len(pages)})\n{lines}"
+
+            message = await ctx.send(format_page(current))
             await message.add_reaction("⬅️")
             await message.add_reaction("➡️")
 
             def check(reaction, user):
-                return user == ctx.author and str(reaction.emoji) in ["⬅️", "➡️"] and reaction.message.id == message.id
+                return (
+                    user == ctx.author
+                    and str(reaction.emoji) in ["⬅️", "➡️"]
+                    and reaction.message.id == message.id
+                )
 
             while True:
                 try:
                     reaction, user = await self.bot.wait_for("reaction_add", timeout=30.0, check=check)
-                    await message.remove_reaction(reaction, user)
+                    try:
+                        await message.remove_reaction(reaction, user)
+                    except discord.Forbidden:
+                        pass  # Ignore if bot can't remove reaction
 
                     if str(reaction.emoji) == "⬅️" and current > 0:
                         current -= 1
                     elif str(reaction.emoji) == "➡️" and current < len(pages) - 1:
                         current += 1
 
-                    await message.edit(content=f"**Songs in Jukebox**\n{pages[current]}")
+                    await message.edit(content=format_page(current))
                 except asyncio.TimeoutError:
                     break
