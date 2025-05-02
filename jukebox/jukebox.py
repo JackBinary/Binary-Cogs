@@ -121,33 +121,35 @@ class Jukebox(commands.Cog):
     
         while True:
             try:
+                # Disconnect if the voice channel is empty (only the bot left)
+                if len(voice.channel.members) <= 1:
+                    await ctx.send("Voice channel is empty. Disconnecting.")
+                    await voice.disconnect()
+                    break
+    
                 song_path = await self.queue[guild_id].get()
                 if song_path is None:
-                    break  # Received shutdown signal
+                    continue  # Just skip if a null token was inserted (stop doesn't kill the loop)
     
                 volume = await self.config.guild(guild).volume()
                 source = discord.FFmpegPCMAudio(song_path)
                 transformed = discord.PCMVolumeTransformer(source, volume=volume)
     
+                playback_done = asyncio.Event()
+    
                 def after_playing(error):
                     if error:
                         print(f"Playback error: {error}")
-                    # Allow the loop to continue
                     self.bot.loop.call_soon_threadsafe(playback_done.set)
     
-                playback_done = asyncio.Event()
                 voice.play(transformed, after=after_playing)
                 await ctx.send(f"🎵 Now playing: `{Path(song_path).stem}`")
     
                 await playback_done.wait()
+    
             except Exception as e:
                 await ctx.send(f"⚠️ Playback error: {e}")
                 continue
-    
-        # Only disconnect after shutdown signal
-        if voice.is_connected():
-            await voice.disconnect()
-        self.players.pop(guild_id, None)
 
     @jukebox.command(name="volume")
     async def volume(self, ctx: commands.Context, value: Optional[float] = None):
@@ -201,6 +203,5 @@ class Jukebox(commands.Cog):
                     self.queue[guild_id].task_done()
                 except asyncio.QueueEmpty:
                     break
-            await self.queue[guild_id].put(None)  # Shutdown signal
-    
-        await ctx.send("⏹️ Stopped playback and cleared the queue.")
+            await ctx.send("⏹️ Stopped playback and cleared the queue.")
+
