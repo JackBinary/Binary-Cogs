@@ -119,46 +119,46 @@ class Jukebox(commands.Cog):
             self.players[guild_id] = self.bot.loop.create_task(self._playback_loop(ctx))
     
     async def _playback_loop(self, ctx: commands.Context):
-    guild = ctx.guild
-    guild_id = guild.id
-    channel = ctx.author.voice.channel
-
-    voice = ctx.voice_client or await channel.connect()
-
-    while True:
-        try:
-            if len(voice.channel.members) <= 1:
-                await ctx.send("Voice channel is empty. Disconnecting.")
-                await voice.disconnect()
-                break
-
-            if not self.queue.get(guild_id):
-                await asyncio.sleep(1)
+        guild = ctx.guild
+        guild_id = guild.id
+        channel = ctx.author.voice.channel
+    
+        voice = ctx.voice_client or await channel.connect()
+    
+        while True:
+            try:
+                if len(voice.channel.members) <= 1:
+                    await ctx.send("Voice channel is empty. Disconnecting.")
+                    await voice.disconnect()
+                    break
+    
+                if not self.queue.get(guild_id):
+                    await asyncio.sleep(1)
+                    continue
+    
+                song_path = self.queue[guild_id].pop(0)
+                self.current_track[guild_id] = song_path
+    
+                volume = await self.config.guild(guild).volume()
+                source = discord.FFmpegPCMAudio(song_path)
+                transformed = discord.PCMVolumeTransformer(source, volume=volume)
+    
+                playback_done = asyncio.Event()
+    
+                def after_playing(error):
+                    if error:
+                        print(f"Playback error: {error}")
+                    self.bot.loop.call_soon_threadsafe(playback_done.set)
+    
+                voice.play(transformed, after=after_playing)
+                await ctx.send(f"🎵 Now playing: `{Path(song_path).stem}`")
+    
+                await playback_done.wait()
+                self.current_track[guild_id] = None
+    
+            except Exception as e:
+                await ctx.send(f"⚠️ Playback error: {e}")
                 continue
-
-            song_path = self.queue[guild_id].pop(0)
-            self.current_track[guild_id] = song_path
-
-            volume = await self.config.guild(guild).volume()
-            source = discord.FFmpegPCMAudio(song_path)
-            transformed = discord.PCMVolumeTransformer(source, volume=volume)
-
-            playback_done = asyncio.Event()
-
-            def after_playing(error):
-                if error:
-                    print(f"Playback error: {error}")
-                self.bot.loop.call_soon_threadsafe(playback_done.set)
-
-            voice.play(transformed, after=after_playing)
-            await ctx.send(f"🎵 Now playing: `{Path(song_path).stem}`")
-
-            await playback_done.wait()
-            self.current_track[guild_id] = None
-
-        except Exception as e:
-            await ctx.send(f"⚠️ Playback error: {e}")
-            continue
 
     @jukebox.command(name="volume")
     async def volume(self, ctx: commands.Context, value: Optional[float] = None):
