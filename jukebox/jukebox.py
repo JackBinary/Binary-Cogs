@@ -220,3 +220,51 @@ class Jukebox(commands.Cog):
     
         voice.stop()
         await ctx.send("⏭️ Skipped the current track.")
+
+    @jukebox.command(name="queue")
+    async def queue(self, ctx: commands.Context):
+        """Display the current jukebox queue."""
+        guild_id = ctx.guild.id
+    
+        if guild_id not in self.queue or self.queue[guild_id].empty():
+            await ctx.send("📭 The queue is currently empty.")
+            return
+    
+        # Extract queued items non-destructively
+        queue_list = list(self.queue[guild_id]._queue)
+        pages = list(chunk_list(queue_list, 10))
+        current = 0
+    
+        def format_page(index):
+            entries = pages[index]
+            lines = "\n".join(f"`{Path(track).stem}`" for track in entries)
+            return f"🎶 **Queued Songs** (Page {index + 1}/{len(pages)})\n{lines}"
+    
+        message = await ctx.send(format_page(current))
+        if len(pages) > 1:
+            await message.add_reaction("⬅️")
+            await message.add_reaction("➡️")
+    
+            def check(reaction, user):
+                return (
+                    user == ctx.author
+                    and str(reaction.emoji) in ["⬅️", "➡️"]
+                    and reaction.message.id == message.id
+                )
+    
+            while True:
+                try:
+                    reaction, user = await self.bot.wait_for("reaction_add", timeout=30.0, check=check)
+                    try:
+                        await message.remove_reaction(reaction, user)
+                    except discord.Forbidden:
+                        pass
+    
+                    if str(reaction.emoji) == "⬅️" and current > 0:
+                        current -= 1
+                    elif str(reaction.emoji) == "➡️" and current < len(pages) - 1:
+                        current += 1
+    
+                    await message.edit(content=format_page(current))
+                except asyncio.TimeoutError:
+                    break
