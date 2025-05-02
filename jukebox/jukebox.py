@@ -408,46 +408,51 @@ class Jukebox(commands.Cog):
         
     @jukebox.command(name="say")
     async def say(self, ctx: commands.Context, *, text: str):
-        """Speak a TTS message, pausing and resuming music playback."""
+        """Speak a TTS message by interrupting playback and restoring it afterward."""
         voice = ctx.voice_client
         if not voice or not voice.is_connected():
             await ctx.send("I'm not in a voice channel.")
             return
     
-        # Store current music stream and pause it
+        guild_id = ctx.guild.id
+        current_song = self.current_track.get(guild_id)
         was_playing = voice.is_playing()
-        original_source = voice.source if was_playing else None
-        if was_playing:
-            voice.pause()
     
-        # Generate TTS file
+        # Stop current playback (song will be restarted)
+        if was_playing:
+            voice.stop()
+    
+        # Generate TTS
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as f:
             gTTS(text).save(f.name)
             tts_path = f.name
     
-        # Play TTS
-        done = asyncio.Event()
+        # Play TTS clip
+        tts_done = asyncio.Event()
     
-        def after_play(error):
+        def after_tts(error):
             if error:
-                print(f"TTS playback error: {error}")
-            self.bot.loop.call_soon_threadsafe(done.set)
+                print(f"TTS error: {error}")
+            self.bot.loop.call_soon_threadsafe(tts_done.set)
     
-        voice.play(discord.FFmpegPCMAudio(tts_path), after=after_play)
-        await done.wait()
+        voice.play(discord.FFmpegPCMAudio(tts_path), after=after_tts)
+        await tts_done.wait()
     
-        # Clean up
         try:
             os.remove(tts_path)
         except Exception:
             pass
     
-        # Resume music by re-assigning and resuming source
-        if original_source:
-            voice.source = original_source
-            voice.resume()
+        # Re-queue the interrupted track if it existed
+        if current_song:
+            self.queue.setdefault(guild_id, []).insert(0, current_song)
+            self.current_track[guild_id] = None  # Allow the playback loop to pick it up again
     
-        # React to confirm
+        # Start the playback loop if it's not running
+        if guild_id not in self.players or self.players[guild_id].done():
+            self.players[guild_id] = self.bot.loop.create_task(self._playback_loop(ctx))
+    
+        # React instead of replying
         try:
             await ctx.message.add_reaction("🗣️")
         except discord.HTTPException:
