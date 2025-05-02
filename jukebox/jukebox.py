@@ -4,6 +4,8 @@ import json
 import os
 import random
 import re
+import subprocess
+import shutil
 import tempfile
 import time
 from pathlib import Path
@@ -11,7 +13,6 @@ from typing import Optional
 
 from redbot.core import commands, Config
 import edge_tts
-# from gtts import gTTS
 
 DEFAULT_VOLUME = 1.0
 
@@ -40,6 +41,12 @@ class Jukebox(commands.Cog):
         self.playlist_path = self.data_path / "playlists"
         self.playlist_path.mkdir(parents=True, exist_ok=True)
         self.track_start_time = {}  # guild_id: float
+        if shutil.which("ffmpeg") is None:
+            try:
+                subprocess.run(["apt", "update"], check=True)
+                subprocess.run(["apt", "install", "-y", "ffmpeg"], check=True)
+            except subprocess.CalledProcessError as e:
+                raise RuntimeError(f"Failed to install ffmpeg: {e}")
 
 
     @commands.group(invoke_without_command=True)
