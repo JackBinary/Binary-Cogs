@@ -1,18 +1,20 @@
 import discord
 import os
-from redbot.core import commands
+from redbot.core import commands, Config
 from redbot.core.utils.chat_formatting import pagify
+from pathlib import Path
+import discord
 import asyncio
 from typing import Optional
-
-LIBRARY_DIR = os.path.join("data", "jukebox_library")
 
 class Jukebox(commands.Cog):
     """A local jukebox for uploading and playing MP3s."""
 
     def __init__(self, bot):
         self.bot = bot
-        os.makedirs(LIBRARY_DIR, exist_ok=True)
+        self.data_path = Path(__file__).parent / "data"
+        self.library_path = self.data_path / "jukebox_library"
+        self.library_path.mkdir(parents=True, exist_ok=True)
         self.current_vc = {}
 
     @commands.group()
@@ -33,7 +35,7 @@ class Jukebox(commands.Cog):
             await ctx.send("Only MP3 files are supported.")
             return
 
-        dest_path = os.path.join(LIBRARY_DIR, f"{name}.mp3")
+        dest_path = os.path.join(self.library_path, f"{name}.mp3")
         await attachment.save(dest_path)
         await ctx.send(f"Added `{name}` to the jukebox.")
 
@@ -47,7 +49,7 @@ class Jukebox(commands.Cog):
         vc = ctx.author.voice.channel
 
         if name:
-            song_path = os.path.join(LIBRARY_DIR, f"{name}.mp3")
+            song_path = os.path.join(self.library_path, f"{name}.mp3")
             if not os.path.isfile(song_path):
                 await ctx.send("Song not found.")
                 return
@@ -60,7 +62,7 @@ class Jukebox(commands.Cog):
             await ctx.send(f"Now playing `{name}`.")
             self.current_vc[ctx.guild.id] = voice
         else:
-            songs = [f[:-4] for f in os.listdir(LIBRARY_DIR) if f.endswith(".mp3")]
+            songs = [f[:-4] for f in os.listdir(self.library_path) if f.endswith(".mp3")]
             if not songs:
                 await ctx.send("The jukebox is empty.")
                 return
