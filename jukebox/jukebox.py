@@ -474,10 +474,6 @@ class Jukebox(commands.Cog):
         if voice.is_playing() and hasattr(voice.source, "_start_time"):
             current_pos = time.time() - voice.source._start_time
     
-        # Stop the current track
-        if voice.is_playing():
-            voice.stop()
-    
         # Get the preferred voice or fallback
         tts_voice = await self.config.guild(ctx.guild).tts_voice()
         if not tts_voice:
@@ -503,6 +499,10 @@ class Jukebox(commands.Cog):
                 "seek": int(current_pos)
             })
             self.current_track[guild_id] = None
+
+        # Stop the current track
+        if voice.is_playing():
+            voice.stop()
     
         # Ensure playback resumes
         if guild_id not in self.players or self.players[guild_id].done():
