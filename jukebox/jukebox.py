@@ -17,7 +17,7 @@ class Jukebox(commands.Cog):
         self.library_path.mkdir(parents=True, exist_ok=True)
         self.current_vc = {}
 
-    @commands.group()
+    @commands.group(invoke_without_command=True)
     async def jukebox(self, ctx: commands.Context):
         """Base command for the Jukebox system."""
         if ctx.invoked_subcommand is None:
