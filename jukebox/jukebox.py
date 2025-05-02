@@ -133,7 +133,7 @@ class Jukebox(commands.Cog):
     
         while True:
             try:
-                # Disconnect if alone
+                # Disconnect if bot is alone
                 if len(voice.channel.members) <= 1:
                     await ctx.send("Voice channel is empty. Disconnecting.")
                     await voice.disconnect()
@@ -144,13 +144,13 @@ class Jukebox(commands.Cog):
                     await asyncio.sleep(1)
                     continue
     
-                # Double-check queue length before popping
+                # Extra safeguard
                 if not self.queue[guild_id]:
                     continue
     
                 entry = self.queue[guild_id].pop(0)
     
-                # Handle dict entries (seek, tts, volume)
+                # Handle dict entries for TTS, resume, volume, etc.
                 is_tts = isinstance(entry, dict) and entry.get("tts", False)
                 volume_override = entry.get("volume") if isinstance(entry, dict) else None
     
@@ -170,6 +170,7 @@ class Jukebox(commands.Cog):
     
                 self.current_track[guild_id] = song_path
     
+                # Volume override (e.g. full volume for TTS) or guild volume
                 volume = volume_override or await self.config.guild(guild).volume()
                 transformed = discord.PCMVolumeTransformer(source, volume=volume)
                 transformed._start_time = time.time()
@@ -187,16 +188,20 @@ class Jukebox(commands.Cog):
                     await ctx.send(f"🎵 Now playing: `{Path(song_path).stem}`")
     
                 await playback_done.wait()
-                self.current_track[guild_id] = None
     
-                # 🔒 Check after playback: if queue is now empty (e.g. via stop), skip popping
+                # 🔒 Stop may have cleared the queue during this time
                 if not self.queue.get(guild_id):
+                    self.current_track[guild_id] = None
                     continue
     
+                # Reset track after successful play
+                self.current_track[guild_id] = None
+    
             except Exception as e:
-                # Optional debug
+                # Optional debug: uncomment during dev
                 # await ctx.send(f"⚠️ Playback error: {e}")
                 continue
+    
 
     @jukebox.command(name="volume")
     async def volume(self, ctx: commands.Context, value: Optional[float] = None):
@@ -251,7 +256,6 @@ class Jukebox(commands.Cog):
             voice.stop()
     
         await ctx.send("🛑 Playback stopped and queue cleared.")
-
     
     @jukebox.command(name="skip")
     async def skip(self, ctx: commands.Context):
@@ -420,7 +424,6 @@ class Jukebox(commands.Cog):
         if guild_id not in self.players or self.players[guild_id].done():
             self.players[guild_id] = self.bot.loop.create_task(self._playback_loop(ctx))
 
-    
     @playlist.command(name="delete")
     async def playlist_delete(self, ctx: commands.Context, name: str):
         """Delete a playlist."""
