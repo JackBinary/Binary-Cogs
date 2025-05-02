@@ -133,28 +133,27 @@ class Jukebox(commands.Cog):
     
         while True:
             try:
+                # Disconnect if alone
                 if len(voice.channel.members) <= 1:
                     await ctx.send("Voice channel is empty. Disconnecting.")
                     await voice.disconnect()
                     break
     
+                # Nothing to play? Wait.
                 if not self.queue.get(guild_id):
                     await asyncio.sleep(1)
                     continue
     
-                entry = self.queue[guild_id].pop(0)
-
-                # Special case: handle stop tokens
-                if isinstance(entry, dict) and entry.get("stop_token"):
-                    self.current_track[guild_id] = None
+                # Double-check queue length before popping
+                if not self.queue[guild_id]:
                     continue
-
     
-                # Handle TTS flags and custom volume
+                entry = self.queue[guild_id].pop(0)
+    
+                # Handle dict entries (seek, tts, volume)
                 is_tts = isinstance(entry, dict) and entry.get("tts", False)
                 volume_override = entry.get("volume") if isinstance(entry, dict) else None
     
-                # Determine actual path and options
                 if isinstance(entry, dict) and "path" in entry:
                     song_path = entry["path"]
                     seek_time = entry.get("seek", 0)
@@ -171,7 +170,6 @@ class Jukebox(commands.Cog):
     
                 self.current_track[guild_id] = song_path
     
-                # Apply volume
                 volume = volume_override or await self.config.guild(guild).volume()
                 transformed = discord.PCMVolumeTransformer(source, volume=volume)
                 transformed._start_time = time.time()
@@ -191,8 +189,12 @@ class Jukebox(commands.Cog):
                 await playback_done.wait()
                 self.current_track[guild_id] = None
     
+                # 🔒 Check after playback: if queue is now empty (e.g. via stop), skip popping
+                if not self.queue.get(guild_id):
+                    continue
+    
             except Exception as e:
-                # Optionally log the error
+                # Optional debug
                 # await ctx.send(f"⚠️ Playback error: {e}")
                 continue
 
@@ -241,14 +243,15 @@ class Jukebox(commands.Cog):
             await ctx.send("I'm not in a voice channel.")
             return
     
-        # Insert a "STOP" token to cancel the next track
-        self.queue[guild_id] = [{"stop_token": True}]
+        # Clear queue and track
+        self.queue[guild_id] = []
         self.current_track[guild_id] = None
     
         if voice.is_playing():
             voice.stop()
     
         await ctx.send("🛑 Playback stopped and queue cleared.")
+
     
     @jukebox.command(name="skip")
     async def skip(self, ctx: commands.Context):
