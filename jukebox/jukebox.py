@@ -143,6 +143,12 @@ class Jukebox(commands.Cog):
                     continue
     
                 entry = self.queue[guild_id].pop(0)
+
+                # Special case: handle stop tokens
+                if isinstance(entry, dict) and entry.get("stop_token"):
+                    self.current_track[guild_id] = None
+                    continue
+
     
                 # Handle TTS flags and custom volume
                 is_tts = isinstance(entry, dict) and entry.get("tts", False)
@@ -235,15 +241,15 @@ class Jukebox(commands.Cog):
             await ctx.send("I'm not in a voice channel.")
             return
     
-        self.queue[guild_id] = []
+        # Insert a "STOP" token to cancel the next track
+        self.queue[guild_id] = [{"stop_token": True}]
         self.current_track[guild_id] = None
     
         if voice.is_playing():
             voice.stop()
     
-        await ctx.send("⏹️ Playback stopped and queue cleared.")
+        await ctx.send("🛑 Playback stopped and queue cleared.")
     
-
     @jukebox.command(name="skip")
     async def skip(self, ctx: commands.Context):
         """Skip the currently playing track."""
