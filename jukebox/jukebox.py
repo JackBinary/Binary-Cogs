@@ -126,78 +126,78 @@ class Jukebox(commands.Cog):
             self.players[guild_id] = self.bot.loop.create_task(self._playback_loop(ctx))
     
     async def _playback_loop(self, ctx: commands.Context):
-    guild = ctx.guild
-    guild_id = guild.id
-    channel = ctx.author.voice.channel
-
-    voice = ctx.voice_client or await channel.connect()
-
-    while True:
-        try:
-            # Disconnect if bot is alone
-            if len(voice.channel.members) <= 1:
-                await ctx.send("Voice channel is empty. Disconnecting.")
-                await voice.disconnect()
-                break
-
-            if not self.queue.get(guild_id):
-                await asyncio.sleep(1)
-                continue
-
-            if not self.queue[guild_id]:
-                continue
-
-            entry = self.queue[guild_id].pop(0)
-
-            # Handle dict entries for TTS, resume, volume, etc.
-            is_tts = isinstance(entry, dict) and entry.get("tts", False)
-            volume_override = entry.get("volume") if isinstance(entry, dict) else None
-
-            if isinstance(entry, dict) and "path" in entry:
-                song_path = entry["path"]
-                seek_time = entry.get("seek", 0)
-
-                ffmpeg_opts = {}
-                if seek_time:
-                    ffmpeg_opts["before_options"] = f"-ss {seek_time}"
-                ffmpeg_opts["options"] = "-vn"
-
-                source = discord.FFmpegPCMAudio(song_path, **ffmpeg_opts)
-            else:
-                song_path = entry
-                source = discord.FFmpegPCMAudio(song_path)
-
-            self.current_track[guild_id] = song_path
-
-            # Only reset start time for real music tracks
-            if not is_tts:
-                self.track_start_time[guild_id] = time.time()
-
-            volume = volume_override or await self.config.guild(guild).volume()
-            transformed = discord.PCMVolumeTransformer(source, volume=volume)
-
-            playback_done = asyncio.Event()
-
-            def after_playing(error):
-                if error:
-                    print(f"Playback error: {error}")
-                self.bot.loop.call_soon_threadsafe(playback_done.set)
-
-            voice.play(transformed, after=after_playing)
-
-            if not is_tts:
-                await ctx.send(f"🎵 Now playing: `{Path(song_path).stem}`")
-
-            await playback_done.wait()
-
-            if not self.queue.get(guild_id):
+        guild = ctx.guild
+        guild_id = guild.id
+        channel = ctx.author.voice.channel
+    
+        voice = ctx.voice_client or await channel.connect()
+    
+        while True:
+            try:
+                # Disconnect if bot is alone
+                if len(voice.channel.members) <= 1:
+                    await ctx.send("Voice channel is empty. Disconnecting.")
+                    await voice.disconnect()
+                    break
+    
+                if not self.queue.get(guild_id):
+                    await asyncio.sleep(1)
+                    continue
+    
+                if not self.queue[guild_id]:
+                    continue
+    
+                entry = self.queue[guild_id].pop(0)
+    
+                # Handle dict entries for TTS, resume, volume, etc.
+                is_tts = isinstance(entry, dict) and entry.get("tts", False)
+                volume_override = entry.get("volume") if isinstance(entry, dict) else None
+    
+                if isinstance(entry, dict) and "path" in entry:
+                    song_path = entry["path"]
+                    seek_time = entry.get("seek", 0)
+    
+                    ffmpeg_opts = {}
+                    if seek_time:
+                        ffmpeg_opts["before_options"] = f"-ss {seek_time}"
+                    ffmpeg_opts["options"] = "-vn"
+    
+                    source = discord.FFmpegPCMAudio(song_path, **ffmpeg_opts)
+                else:
+                    song_path = entry
+                    source = discord.FFmpegPCMAudio(song_path)
+    
+                self.current_track[guild_id] = song_path
+    
+                # Only reset start time for real music tracks
+                if not is_tts:
+                    self.track_start_time[guild_id] = time.time()
+    
+                volume = volume_override or await self.config.guild(guild).volume()
+                transformed = discord.PCMVolumeTransformer(source, volume=volume)
+    
+                playback_done = asyncio.Event()
+    
+                def after_playing(error):
+                    if error:
+                        print(f"Playback error: {error}")
+                    self.bot.loop.call_soon_threadsafe(playback_done.set)
+    
+                voice.play(transformed, after=after_playing)
+    
+                if not is_tts:
+                    await ctx.send(f"🎵 Now playing: `{Path(song_path).stem}`")
+    
+                await playback_done.wait()
+    
+                if not self.queue.get(guild_id):
+                    self.current_track[guild_id] = None
+                    continue
+    
                 self.current_track[guild_id] = None
+    
+            except Exception as e:
                 continue
-
-            self.current_track[guild_id] = None
-
-        except Exception as e:
-            continue
 
     @jukebox.command(name="volume")
     async def volume(self, ctx: commands.Context, value: Optional[float] = None):
