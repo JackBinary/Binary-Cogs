@@ -112,3 +112,19 @@ class Jukebox(commands.Cog):
                     await message.edit(content=format_page(current))
                 except asyncio.TimeoutError:
                     break
+    
+    @jukebox.command(name="remove")
+    async def remove(self, ctx: commands.Context, *, name: str):
+        """Remove a song from the jukebox."""
+        safe_name = sanitize_filename(name.strip())
+        song_path = self.library_path / f"{safe_name}.mp3"
+    
+        if not song_path.is_file():
+            await ctx.send(f"Song `{safe_name}` not found in the jukebox.")
+            return
+    
+        try:
+            song_path.unlink()
+            await ctx.send(f"Removed `{safe_name}` from the jukebox.")
+        except Exception as e:
+            await ctx.send(f"Failed to remove `{safe_name}`: {e}")
