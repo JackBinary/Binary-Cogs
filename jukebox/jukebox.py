@@ -205,3 +205,18 @@ class Jukebox(commands.Cog):
                     break
             await ctx.send("⏹️ Stopped playback and cleared the queue.")
 
+    @jukebox.command(name="skip")
+    async def skip(self, ctx: commands.Context):
+        """Skip the currently playing track."""
+        voice = ctx.voice_client
+    
+        if voice is None or not voice.is_connected():
+            await ctx.send("I'm not in a voice channel.")
+            return
+    
+        if not voice.is_playing():
+            await ctx.send("No track is currently playing.")
+            return
+    
+        voice.stop()
+        await ctx.send("⏭️ Skipped the current track.")
