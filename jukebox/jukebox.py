@@ -199,7 +199,7 @@ class Jukebox(commands.Cog):
 
     @jukebox.command(name="stop")
     async def stop(self, ctx: commands.Context):
-        """Stop all music playback"""
+        """Stop playback and clear the queue without skipping to the next song."""
         voice = ctx.voice_client
         guild_id = ctx.guild.id
     
@@ -207,9 +207,7 @@ class Jukebox(commands.Cog):
             await ctx.send("I'm not in a voice channel.")
             return
     
-        if voice.is_playing():
-            voice.stop()
-    
+        # Clear queue
         if guild_id in self.queue:
             while not self.queue[guild_id].empty():
                 try:
@@ -217,7 +215,13 @@ class Jukebox(commands.Cog):
                     self.queue[guild_id].task_done()
                 except asyncio.QueueEmpty:
                     break
-            await ctx.send("⏹️ Stopped playback and cleared the queue.")
+    
+        # Stop the current song
+        if voice.is_playing():
+            voice.stop()
+    
+        self.current_track[guild_id] = None
+        await ctx.send("⏹️ Playback stopped and queue cleared.")
 
     @jukebox.command(name="skip")
     async def skip(self, ctx: commands.Context):
