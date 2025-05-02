@@ -162,7 +162,7 @@ class Jukebox(commands.Cog):
                 self.current_track[guild_id] = None
     
             except Exception as e:
-                await ctx.send(f"⚠️ Playback error: {e}")
+                # await ctx.send(f"⚠️ Playback error: {e}")
                 continue
 
     @jukebox.command(name="volume")
