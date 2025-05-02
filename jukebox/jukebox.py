@@ -120,7 +120,7 @@ class Jukebox(commands.Cog):
         voice = ctx.voice_client or await channel.connect()
 
         while True:
-            if self.queue[guild_id].empty():
+            if self.queue[guild_id].empty() and not voice.is_playing():
                 await asyncio.sleep(2)
                 continue
 
