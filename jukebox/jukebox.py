@@ -62,31 +62,31 @@ class Jukebox(commands.Cog):
         if not ctx.author.voice or not ctx.author.voice.channel:
             await ctx.send("Join a voice channel first.")
             return
-
+    
         if name is None:
             songs = sorted(f.stem for f in self.library_path.glob("*.mp3"))
             if not songs:
                 await ctx.send("The jukebox is empty.")
                 return
-
+    
             pages = list(chunk_list(songs, 10))
             current = 0
-
+    
             def format_page(index):
                 lines = "\n".join(f"`{title}`" for title in pages[index])
                 return f"**Songs in Jukebox** (Page {index + 1}/{len(pages)})\n{lines}"
-
+    
             message = await ctx.send(format_page(current))
             await message.add_reaction("⬅️")
             await message.add_reaction("➡️")
-
+    
             def check(reaction, user):
                 return (
                     user == ctx.author
                     and str(reaction.emoji) in ["⬅️", "➡️"]
                     and reaction.message.id == message.id
                 )
-
+    
             while True:
                 try:
                     reaction, user = await self.bot.wait_for("reaction_add", timeout=30.0, check=check)
@@ -94,73 +94,71 @@ class Jukebox(commands.Cog):
                         await message.remove_reaction(reaction, user)
                     except discord.Forbidden:
                         pass
-
+    
                     if str(reaction.emoji) == "⬅️" and current > 0:
                         current -= 1
                     elif str(reaction.emoji) == "➡️" and current < len(pages) - 1:
                         current += 1
-
+    
                     await message.edit(content=format_page(current))
                 except asyncio.TimeoutError:
                     break
             return
-
+    
         safe_name = sanitize_filename(name.strip())
         song_path = self.library_path / f"{safe_name}.mp3"
         if not song_path.is_file():
             await ctx.send("Song not found.")
             return
-
+    
         guild_id = ctx.guild.id
-        if guild_id not in self.queue:
-            self.queue[guild_id] = asyncio.Queue()
-
-        await self.queue[guild_id].put(str(song_path))
+        self.queue.setdefault(guild_id, []).append(str(song_path))
         await ctx.send(f"🎶 Queued `{safe_name}`")
-
+    
         if guild_id not in self.players:
             self.players[guild_id] = self.bot.loop.create_task(self._playback_loop(ctx))
-
+    
     async def _playback_loop(self, ctx: commands.Context):
-        guild = ctx.guild
-        guild_id = guild.id
-        channel = ctx.author.voice.channel
-    
-        voice = ctx.voice_client or await channel.connect()
-    
-        while True:
-            try:
-                # Disconnect if the voice channel is empty (only the bot left)
-                if len(voice.channel.members) <= 1:
-                    await ctx.send("Voice channel is empty. Disconnecting.")
-                    await voice.disconnect()
-                    break
-    
-                song_path = await self.queue[guild_id].get()
-                self.current_track[guild_id] = song_path
-                if song_path is None:
-                    continue  # Just skip if a null token was inserted (stop doesn't kill the loop)
-    
-                volume = await self.config.guild(guild).volume()
-                source = discord.FFmpegPCMAudio(song_path)
-                transformed = discord.PCMVolumeTransformer(source, volume=volume)
-    
-                playback_done = asyncio.Event()
-    
-                def after_playing(error):
-                    if error:
-                        print(f"Playback error: {error}")
-                    self.bot.loop.call_soon_threadsafe(playback_done.set)
-    
-                voice.play(transformed, after=after_playing)
-                await ctx.send(f"🎵 Now playing: `{Path(song_path).stem}`")
-    
-                await playback_done.wait()
-                self.current_track[guild_id] = None
-    
-            except Exception as e:
-                await ctx.send(f"⚠️ Playback error: {e}")
+    guild = ctx.guild
+    guild_id = guild.id
+    channel = ctx.author.voice.channel
+
+    voice = ctx.voice_client or await channel.connect()
+
+    while True:
+        try:
+            if len(voice.channel.members) <= 1:
+                await ctx.send("Voice channel is empty. Disconnecting.")
+                await voice.disconnect()
+                break
+
+            if not self.queue.get(guild_id):
+                await asyncio.sleep(1)
                 continue
+
+            song_path = self.queue[guild_id].pop(0)
+            self.current_track[guild_id] = song_path
+
+            volume = await self.config.guild(guild).volume()
+            source = discord.FFmpegPCMAudio(song_path)
+            transformed = discord.PCMVolumeTransformer(source, volume=volume)
+
+            playback_done = asyncio.Event()
+
+            def after_playing(error):
+                if error:
+                    print(f"Playback error: {error}")
+                self.bot.loop.call_soon_threadsafe(playback_done.set)
+
+            voice.play(transformed, after=after_playing)
+            await ctx.send(f"🎵 Now playing: `{Path(song_path).stem}`")
+
+            await playback_done.wait()
+            self.current_track[guild_id] = None
+
+        except Exception as e:
+            await ctx.send(f"⚠️ Playback error: {e}")
+            continue
 
     @jukebox.command(name="volume")
     async def volume(self, ctx: commands.Context, value: Optional[float] = None):
@@ -207,21 +205,14 @@ class Jukebox(commands.Cog):
             await ctx.send("I'm not in a voice channel.")
             return
     
-        # Clear queue
-        if guild_id in self.queue:
-            while not self.queue[guild_id].empty():
-                try:
-                    self.queue[guild_id].get_nowait()
-                    self.queue[guild_id].task_done()
-                except asyncio.QueueEmpty:
-                    break
+        self.queue[guild_id] = []
+        self.current_track[guild_id] = None
     
-        # Stop the current song
         if voice.is_playing():
             voice.stop()
     
-        self.current_track[guild_id] = None
         await ctx.send("⏹️ Playback stopped and queue cleared.")
+    
 
     @jukebox.command(name="skip")
     async def skip(self, ctx: commands.Context):
@@ -248,9 +239,7 @@ class Jukebox(commands.Cog):
         if guild_id in self.current_track and self.current_track[guild_id]:
             now_playing = Path(self.current_track[guild_id]).stem
     
-        queue_entries = []
-        if guild_id in self.queue:
-            queue_entries = list(self.queue[guild_id]._queue)
+        queue_entries = self.queue.get(guild_id, [])
     
         if not now_playing and not queue_entries:
             await ctx.send("📭 Nothing is currently playing and the queue is empty.")
