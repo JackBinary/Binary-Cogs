@@ -298,12 +298,13 @@ class Jukebox(commands.Cog):
     
         random.shuffle(songs)
     
-        if guild_id not in self.queue:
-            self.queue[guild_id] = asyncio.Queue()
-    
-        for song in songs:
-            await self.queue[guild_id].put(str(song))
-    
+        self.queue[guild_id] = [str(song) for song in songs]
+        
+        await ctx.send(f"🔀 Queued `{len(songs)}` songs in random order.")
+        
+        if guild_id not in self.players:
+            self.players[guild_id] = self.bot.loop.create_task(self._playback_loop(ctx))
+        
         await ctx.send(f"🔀 Queued `{len(songs)}` songs in random order.")
     
         if guild_id not in self.players:
@@ -363,23 +364,17 @@ class Jukebox(commands.Cog):
             return
     
         guild_id = ctx.guild.id
-        if guild_id not in self.queue:
-            self.queue[guild_id] = asyncio.Queue()
-        else:
-            while not self.queue[guild_id].empty():
-                try:
-                    self.queue[guild_id].get_nowait()
-                    self.queue[guild_id].task_done()
-                except asyncio.QueueEmpty:
-                    break
-    
-        for track in playlist:
-            self.queue[guild_id].put_nowait(track)
-    
+        self.queue[guild_id] = playlist.copy()
+        
         await ctx.send(f"▶️ Playing playlist `{name}` with `{len(playlist)}` tracks.")
-    
+        
         if guild_id not in self.players:
             self.players[guild_id] = self.bot.loop.create_task(self._playback_loop(ctx))
+        
+                await ctx.send(f"▶️ Playing playlist `{name}` with `{len(playlist)}` tracks.")
+            
+                if guild_id not in self.players:
+                    self.players[guild_id] = self.bot.loop.create_task(self._playback_loop(ctx))
 
     @playlist.command(name="delete")
     async def playlist_delete(self, ctx: commands.Context, name: str):
