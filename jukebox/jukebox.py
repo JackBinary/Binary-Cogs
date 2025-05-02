@@ -327,7 +327,7 @@ class Jukebox(commands.Cog):
         with open(path, "w") as f:
             json.dump(songs, f)
 
-    @jukebox.group(name="playlist")
+    @jukebox.group(name="playlist",invoke_without_command=True)
     async def playlist(self, ctx: commands.Context):
         """Manage playlists."""
         if ctx.invoked_subcommand is None:
