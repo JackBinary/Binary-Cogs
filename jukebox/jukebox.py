@@ -432,18 +432,25 @@ class Jukebox(commands.Cog):
         guild_id = ctx.guild.id
         current_song = self.current_track.get(guild_id)
     
-        # Capture current playback position
+        # Estimate playback position
         original_source = voice.source
         start_time = getattr(original_source, "_start_time", None)
         current_position = time.time() - start_time if start_time else 0
     
-        # Stop music cleanly
+        # Stop current track
         if voice.is_playing():
             voice.stop()
-            while voice.is_playing():
-                await asyncio.sleep(0.1)
     
-        # Get configured TTS voice or default
+        # Wait until playback is truly stopped (source cleared)
+        for _ in range(20):  # up to 2 seconds max
+            if not voice.is_playing() and voice.source is None:
+                break
+            await asyncio.sleep(0.1)
+        else:
+            await ctx.send("⚠️ Failed to interrupt current playback cleanly.")
+            return
+    
+        # Get configured or default TTS voice
         config_voice = await self.config.guild(ctx.guild).tts_voice()
         if not config_voice:
             config_voice = "en-US-AriaNeural"
@@ -453,7 +460,7 @@ class Jukebox(commands.Cog):
             tts_path = f.name
         await edge_tts.Communicate(text, config_voice).save(tts_path)
     
-        # Play TTS
+        # Play TTS audio
         tts_done = asyncio.Event()
     
         def after_tts(error):
@@ -467,7 +474,7 @@ class Jukebox(commands.Cog):
         except Exception:
             pass
     
-        # Resume music at correct position
+        # Resume the track from saved position
         if current_song:
             ffmpeg_opts = {
                 'before_options': f"-ss {int(current_position)}",
@@ -483,12 +490,11 @@ class Jukebox(commands.Cog):
             voice.play(resumed_source)
             self.current_track[guild_id] = current_song
     
-        # React to confirm
         try:
             await ctx.message.add_reaction("🗣️")
         except discord.HTTPException:
             pass
-    
+        
     @jukebox.command(name="ttsvoice")
     async def ttsvoice(self, ctx: commands.Context, *, voice: Optional[str] = None):
         """Set or display the current TTS voice (e.g. en-US-AriaNeural)."""
