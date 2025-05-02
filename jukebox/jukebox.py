@@ -414,41 +414,35 @@ class Jukebox(commands.Cog):
             await ctx.send("I'm not in a voice channel.")
             return
     
-        # Pause music if needed
         was_playing = voice.is_playing()
+    
         if was_playing:
             voice.pause()
     
-        # Generate temporary MP3 with gTTS
+        # Generate temporary TTS file
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as f:
-            tts = gTTS(text)
-            tts.save(f.name)
+            gTTS(text).save(f.name)
             tts_path = f.name
     
-        # Play the TTS clip
-        tts_done = asyncio.Event()
+        # Play the TTS audio
+        voice.play(discord.FFmpegPCMAudio(tts_path))
     
-        def after_tts(error):
-            if error:
-                print(f"TTS playback error: {error}")
-            self.bot.loop.call_soon_threadsafe(tts_done.set)
+        # Wait until TTS is finished
+        while voice.is_playing():
+            await asyncio.sleep(0.25)
     
-        voice.play(discord.FFmpegPCMAudio(tts_path), after=after_tts)
-        await tts_done.wait()
-    
-        # Clean up file
+        # Clean up the temporary file
         try:
             os.remove(tts_path)
         except Exception:
             pass
     
-        # Resume music if it was playing before
+        # Resume music if it was paused
         if was_playing and not voice.is_playing():
             voice.resume()
     
-        # React instead of replying
+        # React to confirm
         try:
             await ctx.message.add_reaction("🗣️")
         except discord.HTTPException:
             pass
-
