@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Optional
 
 from redbot.core import commands, Config
-from gtts import gTTS
+import edge_tts
 
 DEFAULT_VOLUME = 1.0
 
@@ -420,7 +420,6 @@ class Jukebox(commands.Cog):
     
         await ctx.send(f"❌ Track `{track_name}` not found in playlist `{name}`.")
         
-
     @jukebox.command(name="say")
     async def say(self, ctx: commands.Context, *, text: str):
         """Speak a TTS message, restarting the current song from the same timestamp after."""
@@ -432,22 +431,27 @@ class Jukebox(commands.Cog):
         guild_id = ctx.guild.id
         current_song = self.current_track.get(guild_id)
     
-        # Estimate how long the track has been playing
+        # Estimate playback position
         current_position = 0
         if voice.is_playing():
-            current_position = getattr(voice.source, "_start_time", time.time())  # fallback to now
+            current_position = getattr(voice.source, "_start_time", time.time())
             current_position = time.time() - current_position
     
-        # Stop music cleanly
+        # Stop music
         if voice.is_playing():
             voice.stop()
             while voice.is_playing():
                 await asyncio.sleep(0.1)
     
-        # Generate TTS clip
+        # Get voice setting (default to en-US-AriaNeural)
+        config_voice = await self.config.guild(ctx.guild).tts_voice()
+        if not config_voice:
+            config_voice = "en-US-AriaNeural"
+    
+        # Generate TTS with edge-tts
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as f:
-            gTTS(text, lang="en").save(f.name)
             tts_path = f.name
+        await edge_tts.Communicate(text, config_voice).save(tts_path)
     
         # Play TTS
         tts_done = asyncio.Event()
@@ -463,10 +467,9 @@ class Jukebox(commands.Cog):
         except Exception:
             pass
     
-        # Resume music using FFmpeg -ss to seek
+        # Resume music using seek
         if current_song:
             seek_seconds = int(current_position)
-    
             ffmpeg_opts = {
                 'before_options': f"-ss {seek_seconds}",
                 'options': "-vn"
@@ -480,8 +483,22 @@ class Jukebox(commands.Cog):
             voice.play(new_source)
             self.current_track[guild_id] = current_song
     
-        # React to confirm
         try:
             await ctx.message.add_reaction("🗣️")
         except discord.HTTPException:
             pass
+    
+    @jukebox.command(name="ttsvoice")
+    async def ttsvoice(self, ctx: commands.Context, *, voice: Optional[str] = None):
+        """Set or display the current TTS voice (e.g. en-US-AriaNeural)."""
+        if voice is None:
+            current = await self.config.guild(ctx.guild).tts_voice()
+            if current:
+                await ctx.send(f"🗣️ Current TTS voice: `{current}`")
+            else:
+                await ctx.send("⚠️ No TTS voice set. Default will be used.")
+            return
+    
+        # Optional: validate known voice list here
+        await self.config.guild(ctx.guild).tts_voice.set(voice)
+        await ctx.send(f"✅ TTS voice set to `{voice}`")
