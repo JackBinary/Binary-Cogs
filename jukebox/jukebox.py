@@ -155,6 +155,7 @@ class Jukebox(commands.Cog):
                     self.bot.loop.call_soon_threadsafe(playback_done.set)
     
                 voice.play(transformed, after=after_playing)
+                voice.source._start_time = time.time()
                 await ctx.send(f"🎵 Now playing: `{Path(song_path).stem}`")
     
                 await playback_done.wait()
