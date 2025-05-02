@@ -119,29 +119,35 @@ class Jukebox(commands.Cog):
     
         voice = ctx.voice_client or await channel.connect()
     
-        try:
-            while True:
-                # Wait indefinitely until a new song is added
+        while True:
+            try:
                 song_path = await self.queue[guild_id].get()
                 if song_path is None:
-                    break  # This is the signal to exit the loop
+                    break  # Received shutdown signal
     
                 volume = await self.config.guild(guild).volume()
                 source = discord.FFmpegPCMAudio(song_path)
-                voice.source = discord.PCMVolumeTransformer(source, volume=volume)
+                transformed = discord.PCMVolumeTransformer(source, volume=volume)
     
-                try:
-                    voice.play(voice.source)
-                except Exception as e:
-                    await ctx.send(f"Error playing track: {e}")
-                    continue
+                def after_playing(error):
+                    if error:
+                        print(f"Playback error: {error}")
+                    # Allow the loop to continue
+                    self.bot.loop.call_soon_threadsafe(playback_done.set)
     
-                while voice.is_playing():
-                    await asyncio.sleep(1)
+                playback_done = asyncio.Event()
+                voice.play(transformed, after=after_playing)
+                await ctx.send(f"🎵 Now playing: `{Path(song_path).stem}`")
     
-        finally:
-            self.players.pop(guild_id, None)
+                await playback_done.wait()
+            except Exception as e:
+                await ctx.send(f"⚠️ Playback error: {e}")
+                continue
+    
+        # Only disconnect after shutdown signal
+        if voice.is_connected():
             await voice.disconnect()
+        self.players.pop(guild_id, None)
 
     @jukebox.command(name="volume")
     async def volume(self, ctx: commands.Context, value: Optional[float] = None):
