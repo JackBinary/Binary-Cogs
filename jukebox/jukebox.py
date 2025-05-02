@@ -368,6 +368,7 @@ class Jukebox(commands.Cog):
         # Overwrite the queue with a fresh copy of the playlist
         self.queue[guild_id] = playlist.copy()
         self.current_track[guild_id] = None
+        voice.stop()
     
         await ctx.send(f"▶️ Playing playlist `{name}` with `{len(playlist)}` tracks.")
     
