@@ -116,31 +116,32 @@ class Jukebox(commands.Cog):
         guild = ctx.guild
         guild_id = guild.id
         channel = ctx.author.voice.channel
-
+    
         voice = ctx.voice_client or await channel.connect()
-
-        while True:
-            if self.queue[guild_id].empty() and not voice.is_playing():
-                await asyncio.sleep(2)
-                continue
-
-            try:
+    
+        try:
+            while True:
+                # Wait indefinitely until a new song is added
                 song_path = await self.queue[guild_id].get()
+                if song_path is None:
+                    break  # This is the signal to exit the loop
+    
                 volume = await self.config.guild(guild).volume()
-
                 source = discord.FFmpegPCMAudio(song_path)
                 voice.source = discord.PCMVolumeTransformer(source, volume=volume)
-
+    
                 try:
                     voice.play(voice.source)
                 except Exception as e:
                     await ctx.send(f"Error playing track: {e}")
-                    break
-
+                    continue
+    
                 while voice.is_playing():
                     await asyncio.sleep(1)
-            except Exception as e:
-                await ctx.send(f"Error playing track: {e}")
+    
+        finally:
+            self.players.pop(guild_id, None)
+            await voice.disconnect()
 
     @jukebox.command(name="volume")
     async def volume(self, ctx: commands.Context, value: Optional[float] = None):
