@@ -477,7 +477,7 @@ class Jukebox(commands.Cog):
         if not tts_voice:
             tts_voice = "en-US-AriaNeural"
 
-        text = html.escape(text.strip().replace("\n"," "))
+        text = text.replace('"','\\"').replace("'","\\'")
     
         # Generate TTS with edge-tts
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as f:
