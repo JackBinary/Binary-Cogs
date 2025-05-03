@@ -454,7 +454,7 @@ class Jukebox(commands.Cog):
     
         await ctx.send(f"❌ Track `{track_name}` not found in playlist `{name}`.")
         
-    @jukebox.command(name="say")
+    @commands.command(name="tts")
     async def say(self, ctx: commands.Context, *, text: str):
         """Speak a TTS message, then resume the current track from the same position."""
         print(text)
@@ -512,7 +512,7 @@ class Jukebox(commands.Cog):
         except discord.HTTPException:
             pass
 
-    @jukebox.command(name="ttsvoice")
+    @commands.command(name="ttsvoice")
     async def ttsvoice(self, ctx: commands.Context, *, voice: Optional[str] = None):
         """Set or display the current TTS voice (e.g. en-US-AriaNeural)."""
         if voice is None:
