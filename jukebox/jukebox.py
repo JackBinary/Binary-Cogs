@@ -1,5 +1,6 @@
 import discord
 import asyncio
+import html
 import json
 import os
 import random
@@ -475,6 +476,8 @@ class Jukebox(commands.Cog):
         tts_voice = await self.config.guild(ctx.guild).tts_voice()
         if not tts_voice:
             tts_voice = "en-US-AriaNeural"
+
+        text = html.escape(text.strip().replace("\n"," "))
     
         # Generate TTS with edge-tts
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as f:
