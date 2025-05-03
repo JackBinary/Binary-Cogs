@@ -459,8 +459,11 @@ class Jukebox(commands.Cog):
         """Speak a TTS message, then resume the current track from the same position."""
         voice = ctx.voice_client
         if not voice or not voice.is_connected():
-            await ctx.send("I'm not in a voice channel.")
-            return
+            if ctx.author.voice and ctx.author.voice.channel:
+                voice = await ctx.author.voice.channel.connect()
+            else:
+                await ctx.send("You must be in a voice channel for me to speak.")
+                return
     
         guild_id = ctx.guild.id
         current_track = self.current_track.get(guild_id)
