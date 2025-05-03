@@ -458,6 +458,7 @@ class Jukebox(commands.Cog):
     @jukebox.command(name="say")
     async def say(self, ctx: commands.Context, *, text: str):
         """Speak a TTS message, then resume the current track from the same position."""
+        text = text.replace('"',"'")
         voice = ctx.voice_client
         if not voice or not voice.is_connected():
             await ctx.send("I'm not in a voice channel.")
