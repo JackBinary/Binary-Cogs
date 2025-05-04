@@ -129,7 +129,9 @@ class Jukebox(commands.Cog):
         self.queue.setdefault(guild_id, []).append(str(song_path))
         await ctx.send(f"🎶 Queued `{safe_name}`")
     
-        if guild_id not in self.players:
+        # Start or restart playback loop if needed
+        task = self.players.get(guild_id)
+        if not task or task.done() or task.cancelled():
             self.players[guild_id] = self.bot.loop.create_task(self._playback_loop(ctx))
     
     async def _playback_loop(self, ctx: commands.Context):
@@ -140,7 +142,10 @@ class Jukebox(commands.Cog):
         voice = ctx.voice_client or await channel.connect()
     
         while True:
-            try:    
+            try:
+                if not guild.voice_client or not guild.voice_client.is_connected():
+                    break
+
                 if not self.queue.get(guild_id):
                     await asyncio.sleep(1)
                     continue
@@ -199,6 +204,7 @@ class Jukebox(commands.Cog):
     
             except Exception as e:
                 continue
+    self.players.pop(guild.id, None)
 
     @jukebox.command(name="volume")
     async def volume(self, ctx: commands.Context, value: Optional[float] = None):
@@ -329,7 +335,12 @@ class Jukebox(commands.Cog):
     @jukebox.command(name="shuffle")
     async def shuffle(self, ctx: commands.Context):
         """Shuffle and queue all tracks from the jukebox library."""
-        guild_id = ctx.guild.id
+        if not ctx.author.voice or not ctx.author.voice.channel:
+            await ctx.send("Join a voice channel first.")
+            return
+    
+        guild = ctx.guild
+        guild_id = guild.id
         songs = list(self.library_path.glob("*.mp3"))
     
         if not songs:
@@ -338,13 +349,20 @@ class Jukebox(commands.Cog):
     
         random.shuffle(songs)
     
+        # Replace or append to the existing queue
         self.queue[guild_id] = [str(song) for song in songs]
-        
         await ctx.send(f"🔀 Queued `{len(songs)}` songs in random order.")
-        
-        if guild_id not in self.players:
-            self.players[guild_id] = self.bot.loop.create_task(self._playback_loop(ctx))
     
+        # Optional: move bot to the right channel if already connected
+        voice = guild.voice_client
+        if voice and voice.channel != ctx.author.voice.channel:
+            await voice.move_to(ctx.author.voice.channel)
+    
+        # Start or restart playback loop if needed
+        task = self.players.get(guild_id)
+        if not task or task.done() or task.cancelled():
+            self.players[guild_id] = self.bot.loop.create_task(self._playback_loop(ctx))
+
     def _get_playlist_file(self, name: str) -> Path:
         safe_name = sanitize_filename(name.strip().lower())
         return self.playlist_path / f"{safe_name}.json"
@@ -393,32 +411,44 @@ class Jukebox(commands.Cog):
     @playlist.command(name="play")
     async def playlist_play(self, ctx: commands.Context, name: str):
         """Stop current playback and start playing a playlist."""
+        if not ctx.author.voice or not ctx.author.voice.channel:
+            await ctx.send("Join a voice channel first.")
+            return
+    
         playlist_data = self._load_playlist(name)
         if not playlist_data:
             await ctx.send(f"❌ Playlist `{name}` is empty or does not exist.")
             return
     
-        guild_id = ctx.guild.id
-        voice = ctx.voice_client
+        guild = ctx.guild
+        guild_id = guild.id
+        voice = guild.voice_client
     
-        # Stop playback if necessary
-        if voice and voice.is_connected():
-            if voice.is_playing():
-                voice.stop()
+        # Move bot if connected to wrong channel
+        if voice and voice.channel != ctx.author.voice.channel:
+            await voice.move_to(ctx.author.voice.channel)
+        elif not voice:
+            # Not connected at all — connect
+            voice = await ctx.author.voice.channel.connect()
     
-        # Clear queue and track
+        # Stop current playback if active
+        if voice.is_playing():
+            voice.stop()
+    
+        # Clear queue and current track safely
         self.queue[guild_id] = []
         self.current_track[guild_id] = None
     
-        # Add songs to queue
+        # Add valid songs to queue
         for song_path in playlist_data:
             if Path(song_path).is_file():
                 self.queue[guild_id].append(song_path)
     
-        await ctx.send(f"▶️ Playing playlist `{name}` with `{len(playlist_data)}` tracks.")
+        await ctx.send(f"▶️ Playing playlist `{name}` with `{len(self.queue[guild_id])}` tracks.")
     
-        # Start the playback loop if not running
-        if guild_id not in self.players or self.players[guild_id].done():
+        # Start or restart playback loop
+        task = self.players.get(guild_id)
+        if not task or task.done() or task.cancelled():
             self.players[guild_id] = self.bot.loop.create_task(self._playback_loop(ctx))
 
     @playlist.command(name="delete")
@@ -457,61 +487,75 @@ class Jukebox(commands.Cog):
     @commands.command(name="tts")
     async def say(self, ctx: commands.Context, *, text: str):
         """Speak a TTS message, then resume the current track from the same position."""
-        voice = ctx.voice_client
-        if not voice or not voice.is_connected():
-            if ctx.author.voice and ctx.author.voice.channel:
-                voice = await ctx.author.voice.channel.connect()
-            else:
-                await ctx.send("You must be in a voice channel for me to speak.")
-                return
+        if not ctx.author.voice or not ctx.author.voice.channel:
+            await ctx.send("You must be in a voice channel for me to speak.")
+            return
     
-        guild_id = ctx.guild.id
+        guild = ctx.guild
+        guild_id = guild.id
+        voice = guild.voice_client
+    
+        if voice:
+            if voice.channel != ctx.author.voice.channel:
+                await voice.move_to(ctx.author.voice.channel)
+        else:
+            voice = await ctx.author.voice.channel.connect()
+    
         current_track = self.current_track.get(guild_id)
         queue = self.queue.setdefault(guild_id, [])
     
-        # Estimate accurate playback time using global start timestamp
+        # Estimate current playback position
         current_pos = 0
         if current_track and guild_id in self.track_start_time:
             current_pos = time.time() - self.track_start_time[guild_id]
+            current_pos = max(0, int(current_pos))
     
-        # Get the preferred voice or fallback
-        tts_voice = await self.config.guild(ctx.guild).tts_voice()
+        # Get TTS voice
+        tts_voice = await self.config.guild(guild).tts_voice()
         if not tts_voice:
             tts_voice = "en-US-AriaNeural"
     
-        # Generate TTS with edge-tts
+        # Generate TTS audio using edge-tts
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as f:
             tts_path = f.name
-        communicate = edge_tts.Communicate(text, tts_voice)
-        await communicate.save(tts_path)
+        try:
+            communicate = edge_tts.Communicate(text, tts_voice)
+            await communicate.save(tts_path)
+        except Exception as e:
+            os.unlink(tts_path)
+            await ctx.send(f"❌ TTS generation failed: {e}")
+            return
     
-        # Insert TTS at the front
+        # Queue TTS at front
         queue.insert(0, {
             "path": tts_path,
             "tts": True,
             "volume": 1.0
         })
     
-        # Reinsert interrupted track at the front
-        if current_track:
+        # Requeue interrupted track if appropriate
+        if current_track and not isinstance(current_track, dict):
             queue.insert(1, {
                 "path": current_track,
                 "tts": True,
-                "seek": int(current_pos)
+                "seek": current_pos
             })
             self.current_track[guild_id] = None
     
-        # Stop current track to allow TTS to queue in
+        # Stop current audio to trigger playback loop
         if voice.is_playing():
             voice.stop()
     
-        if guild_id not in self.players or self.players[guild_id].done():
+        # Ensure playback loop is running
+        task = self.players.get(guild_id)
+        if not task or task.done() or task.cancelled():
             self.players[guild_id] = self.bot.loop.create_task(self._playback_loop(ctx))
     
         try:
             await ctx.message.add_reaction("🗣️")
         except discord.HTTPException:
             pass
+
 
     @commands.command(name="ttsvoice")
     async def ttsvoice(self, ctx: commands.Context, *, voice: Optional[str] = None):
