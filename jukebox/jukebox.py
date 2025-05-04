@@ -204,7 +204,7 @@ class Jukebox(commands.Cog):
     
             except Exception as e:
                 continue
-    self.players.pop(guild.id, None)
+        self.players.pop(guild.id, None)
 
     @jukebox.command(name="volume")
     async def volume(self, ctx: commands.Context, value: Optional[float] = None):
