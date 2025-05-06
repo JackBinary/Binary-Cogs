@@ -55,20 +55,45 @@ class Jukebox(commands.Cog):
 
     @jukebox.command(name="add")
     async def add(self, ctx: commands.Context, *, name: str):
-        """Upload an MP3 file to the bot to add to the library."""
+        """Upload an MP3 or MP4 file to add to the jukebox library."""
         if not ctx.message.attachments:
-            await ctx.send("Attach an MP3 file to this message.")
+            await ctx.send("Attach an MP3 or MP4 file to this message.")
             return
-
+    
         attachment = ctx.message.attachments[0]
-        if not attachment.filename.lower().endswith(".mp3"):
-            await ctx.send("Only MP3 files are supported.")
+        filename = attachment.filename.lower()
+        if not (filename.endswith(".mp3") or filename.endswith(".mp4")):
+            await ctx.send("Only MP3 and MP4 files are supported.")
             return
-
+    
         safe_name = sanitize_filename(name.strip())
         dest_path = self.library_path / f"{safe_name}.mp3"
-        await attachment.save(dest_path)
+    
+        # Use temp file to store the uploaded media
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp_input_path = Path(tmpdir) / attachment.filename
+            await attachment.save(temp_input_path)
+    
+            if filename.endswith(".mp4"):
+                # Convert MP4 to MP3 using ffmpeg
+                ffmpeg_cmd = [
+                    "ffmpeg", "-i", str(temp_input_path),
+                    "-vn", "-acodec", "libmp3lame", "-y", str(dest_path)
+                ]
+                proc = await asyncio.create_subprocess_exec(
+                    *ffmpeg_cmd, stdout=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.DEVNULL
+                )
+                await proc.communicate()
+                if proc.returncode != 0 or not dest_path.exists():
+                    await ctx.send("Failed to convert MP4 to MP3.")
+                    return
+            else:
+                # Save MP3 directly
+                shutil.copy(temp_input_path, dest_path)
+    
         await ctx.send(f"Added `{safe_name}` to the jukebox.")
+
 
     @jukebox.command(name="play")
     async def play(self, ctx: commands.Context, *, name: Optional[str] = None):
