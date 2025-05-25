@@ -231,7 +231,7 @@ class ImageGen(commands.Cog):
             positive_prompt.insert(0, "general")
             negative_prompt.insert(0, "nsfw, explicit")
         
-        positive_prompt = f"{loras} masterpiece, best quality, amazing quality, " + ', '.join(positive_prompt)
+        positive_prompt = f"{loras}, masterpiece, best quality, amazing quality, " + ', '.join(positive_prompt)
         negative_prompt = "bad quality, worst quality, worst detail, sketch, censor, watermark, signature, " + ', '.join(negative_prompt)
 
         # High-Resolution settings for the first Image (txt2img)
@@ -452,19 +452,19 @@ class ImageGen(commands.Cog):
         else:
             negative_prompt = "bad quality, worst quality, worst detail, sketch, censor, watermark, signature"
         
-        positive_prompt = f"{loras} score_9, score_8_up, score_7_up, score_6_up, source_anime, " + ", ".join(tag_list).replace('_', ' ')
+        positive_prompt = f"{loras}, masterpiece, best quality, amazing quality, " + ", ".join(tag_list).replace('_', ' ')
     
         payload = {
             "init_images": [image_base64],
             "prompt": positive_prompt,
             "negative_prompt": negative_prompt,
             "seed": -1,
-            "steps": 28,
+            "steps": 20,
             "width": new_width,
             "height": new_height,
-            "cfg_scale": 2.5,
+            "cfg_scale": 4.5,
             "sampler_name": "Euler a",
-            "scheduler": "SGM Uniform",
+            "scheduler": "Karras",
             "batch_size": 1,
             "n_iter": 1,
             "force_task_id": task_id,
