@@ -164,6 +164,13 @@ class Jukebox(commands.Cog):
         guild_id = guild.id
         channel = ctx.author.voice.channel
     
+        # Force cleanup of broken connection before connecting
+        if ctx.voice_client and not ctx.voice_client.is_connected():
+            try:
+                await ctx.voice_client.disconnect(force=True)
+            except Exception:
+                pass
+    
         voice = ctx.voice_client or await channel.connect()
     
         while True:
