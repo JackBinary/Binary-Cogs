@@ -1,10 +1,7 @@
 """Handles image generation via Stable Diffusion WebUI API."""
 
-import base64
 import threading
-from io import BytesIO
 from time import sleep
-
 import requests
 
 
