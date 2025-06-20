@@ -35,8 +35,8 @@ class InteractiveShell(commands.Cog):
                     f"(ID: {user.id}) attempted to start a {session_type} session.\n"
                 )
         except OSError:
-        # Suppressed log failure, common in readonly containers
-        pass
+            # Suppressed log failure, common in readonly containers
+            pass
 
     @commands.command()
     @commands.is_owner()
