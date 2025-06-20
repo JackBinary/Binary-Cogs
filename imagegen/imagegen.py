@@ -99,8 +99,25 @@ class ImageGen(commands.Cog):
             positive_prompt.insert(0, "general")
             negative_prompt.insert(0, "nsfw, explicit")
 
-        positive_prompt = f"{loras}, masterpiece, best quality, amazing quality, " + ', '.join(positive_prompt)
-        negative_prompt = "bad quality, worst quality, worst detail, sketch, censor, watermark, signature, " + ', '.join(negative_prompt)
+        positive_prompt = ", ".join([
+            loras,
+            "masterpiece",
+            "best quality",
+            "amazing quality",
+            *positive_prompt
+        ])
+
+        negative_prompt = ", ".join([
+            "bad quality",
+            "worst quality",
+            "worst detail",
+            "sketch",
+            "censor",
+            "watermark",
+            "signature",
+            *negative_prompt
+        ])
+
 
         # High-Resolution settings for the first Image (txt2img)
         payload = {
@@ -132,7 +149,9 @@ class ImageGen(commands.Cog):
                 result = self.image_generator.callback(task_id)
                 if result:
                     current_image_base64 = result["image"]
-                    if current_image_base64 != base64_image:  # Check if new image base64 string exists
+
+                    # Check if new image base64 string exists
+                    if current_image_base64 != base64_image:  
                         base64_image = current_image_base64
                         # Decode the base64 string only when sending the image
                         image_data = base64.b64decode(base64_image)
