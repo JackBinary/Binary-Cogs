@@ -28,11 +28,10 @@ def chunk_list(data, size):
     for i in range(0, len(data), size):
         yield data[i:i + size]
 
-
 class Jukebox(commands.Cog): # pylint: disable=too-many-instance-attributes
     """a simple music player that uses FFMPEG to play local tracks."""
 
-    def __init__(self, bot): 
+    def __init__(self, bot):
         self.bot = bot
         self.data_path = Path(__file__).parent / "data"
         self.library_path = self.data_path / "jukebox_library"
@@ -174,7 +173,7 @@ class Jukebox(commands.Cog): # pylint: disable=too-many-instance-attributes
         if vc and not vc.is_connected():
             try:
                 await vc.disconnect(force=True)
-            except Exception as e:
+            except Exception as e: # pylint: disable=broad-exception-caught
                 print(f"[Jukebox] Cleanup error: {e}")
 
     def _is_connected(self, guild: discord.Guild) -> bool:
@@ -242,7 +241,7 @@ class Jukebox(commands.Cog): # pylint: disable=too-many-instance-attributes
                 await playback_done.wait()
                 self.current_track[guild_id] = None
 
-            except Exception as e:
+            except Exception as e: # pylint: disable=broad-exception-caught
                 print(f"[Jukebox] Playback error: {e}")
                 continue
 
@@ -280,7 +279,7 @@ class Jukebox(commands.Cog): # pylint: disable=too-many-instance-attributes
         try:
             song_path.unlink()
             await ctx.send(f"Removed `{safe_name}` from the jukebox.")
-        except Exception as e:
+        except Exception as e: # pylint: disable=broad-exception-caught
             await ctx.send(f"Failed to remove `{safe_name}`: {e}")
 
     @jukebox.command(name="stop")
@@ -416,12 +415,12 @@ class Jukebox(commands.Cog): # pylint: disable=too-many-instance-attributes
         path = self._get_playlist_file(name)
         if not path.is_file():
             return []
-        with open(path, "r") as f:
+        with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
 
     def _save_playlist(self, name: str, songs: list[str]):
         path = self._get_playlist_file(name)
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             json.dump(songs, f)
 
     @jukebox.group(name="playlist",invoke_without_command=True)
@@ -507,7 +506,7 @@ class Jukebox(commands.Cog): # pylint: disable=too-many-instance-attributes
         try:
             path.unlink()
             await ctx.send(f"🗑️ Deleted playlist `{name}`.")
-        except Exception as e:
+        except Exception as e: # pylint: disable=broad-exception-caught
             await ctx.send(f"⚠️ Failed to delete playlist `{name}`: {e}")
 
     @playlist.command(name="remove")
@@ -566,7 +565,7 @@ class Jukebox(commands.Cog): # pylint: disable=too-many-instance-attributes
         try:
             communicate = edge_tts.Communicate(text, tts_voice)
             await communicate.save(tts_path)
-        except Exception as e:
+        except Exception as e: # pylint: disable=broad-exception-caught
             os.unlink(tts_path)
             await ctx.send(f"❌ TTS generation failed: {e}")
             return
