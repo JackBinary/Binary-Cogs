@@ -1,10 +1,12 @@
+"""Main module for the InteractiveShell cog."""
+
 import asyncio
-import subprocess
-import discord
 import io
+from datetime import datetime
+
+import discord
 from redbot.core import commands
 from redbot.core.bot import Red
-from datetime import datetime
 
 # Attempt to import paramiko
 try:
@@ -12,6 +14,7 @@ try:
     HAS_PARAMIKO = True
 except (ImportError, ModuleNotFoundError):
     HAS_PARAMIKO = False
+
 
 class InteractiveShell(commands.Cog):
     """A cog for an interactive shell session."""
@@ -26,27 +29,29 @@ class InteractiveShell(commands.Cog):
     def log_attempt(self, user, session_type):
         """Log an attempt to start a shell or SSH session."""
         try:
-            with open(self.log_file, "a") as f:
-                f.write(f"{datetime.utcnow().isoformat()} - {user} (ID: {user.id}) attempted to start a {session_type} session.\n")
-        except:
-            return
+            with open(self.log_file, "a", encoding="utf-8") as f:
+                f.write(
+                    f"{datetime.utcnow().isoformat()} - {user} "
+                    f"(ID: {user.id}) attempted to start a {session_type} session.\n"
+                )
+        except Exception:
+            pass
 
     @commands.command()
     @commands.is_owner()
     async def start_shell(self, ctx):
         """Start an interactive shell session."""
         self.log_attempt(ctx.author, "shell")
-        
+
         if ctx.author.id in self.sessions:
             await ctx.send("You already have an active shell session.")
             return
 
-        # Start the shell process
         proc = await asyncio.create_subprocess_shell(
-            '/bin/bash',
+            "/bin/bash",
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
+            stderr=asyncio.subprocess.PIPE,
         )
 
         self.sessions[ctx.author.id] = proc
@@ -54,12 +59,10 @@ class InteractiveShell(commands.Cog):
 
         while True:
             try:
-                # Read the output from the shell
                 output = await proc.stdout.read(100)
                 if output:
                     await ctx.send(f"```\n{output.decode()}\n```")
 
-                # Check if the process has terminated
                 if proc.returncode is not None:
                     await ctx.send("Shell session has ended.")
                     del self.sessions[ctx.author.id]
@@ -84,7 +87,9 @@ class InteractiveShell(commands.Cog):
                 client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
                 client.connect(ip, username=username, password=password)
                 self.ssh_clients[ctx.author.id] = client
-                await ctx.send(f"Connected to {ip} as {username}. Type 'exit' or use the command '[p]end_ssh' to end the session.")
+                await ctx.send(
+                    f"Connected to {ip} as {username}. Type 'exit' or use '[p]end_ssh' to end the session."
+                )
             except Exception as e:
                 await ctx.send(f"Failed to connect: {e}")
                 return
@@ -95,20 +100,19 @@ class InteractiveShell(commands.Cog):
 
                 try:
                     message = await self.bot.wait_for("message", check=check)
-                    if message.content.strip().lower() == 'exit':
+                    if message.content.strip().lower() == "exit":
                         client.close()
                         await ctx.send("Ending SSH session.")
                         del self.ssh_clients[ctx.author.id]
                         break
 
-                    stdin, stdout, stderr = client.exec_command(message.content)
+                    _, stdout, stderr = client.exec_command(message.content)
                     output = stdout.read().decode() + stderr.read().decode()
+
                     if len(output) > 2000:
                         await ctx.send("Output too long to display, sending as a file.")
-                        buffer = io.BytesIO()
-                        buffer.write(output.encode())  # encode to bytes
-                        buffer.seek(0)  # reset cursor to start
-                        
+                        buffer = io.BytesIO(output.encode())
+                        buffer.seek(0)
                         await ctx.send(file=discord.File(fp=buffer, filename="ssh_output.txt"))
                     else:
                         await ctx.send(f"```\n{output}\n```")
@@ -118,17 +122,17 @@ class InteractiveShell(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
+        """Handle incoming messages for active shell sessions."""
         if message.author.id not in self.sessions:
             return
 
         proc = self.sessions[message.author.id]
-        if message.content.strip().lower() == 'exit':
+        if message.content.strip().lower() == "exit":
             proc.terminate()
             await message.channel.send("Ending shell session.")
             del self.sessions[message.author.id]
             return
 
-        # Send the command to the shell process
         proc.stdin.write(f"{message.content}\n".encode())
         await proc.stdin.drain()
 
@@ -159,5 +163,7 @@ class InteractiveShell(commands.Cog):
             await ctx.send("Ending SSH session.")
             del self.ssh_clients[ctx.author.id]
 
+
 def setup(bot):
+    """Redbot entry point."""
     bot.add_cog(InteractiveShell(bot))
