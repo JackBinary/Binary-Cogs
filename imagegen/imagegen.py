@@ -20,7 +20,11 @@ class ImageGen(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
-        self.config = Config.get_conf(self, identifier=1234567890, force_registration=True)
+        self.config = Config.get_conf(
+            self,
+            identifier=1234567890,
+            force_registration=True
+        )
         default_global = {
             "api_url": "http://127.0.0.1:7860",
         }
@@ -43,14 +47,20 @@ class ImageGen(commands.Cog):
     async def setlora(self, ctx, *, loras: str):
         """Set the default LoRAs for the current channel."""
         await self.config.channel(ctx.channel).loras.set(loras)
-        await ctx.reply(f"LoRAs for this channel have been updated:\n{loras}", mention_author=True)
+        await ctx.reply(
+            f"LoRAs for this channel have been updated:\n{loras}",
+            mention_author=True
+        )
 
     @commands.command()
     async def setapiurl(self, ctx, url: str):
         """Sets the API URL for the Stable Diffusion WebUI."""
         await self.config.api_url.set(url)
         self.image_generator.set_url(url)  # Update the ImageGenerator's URL
-        await ctx.reply(f"API URL has been set to: {url}", mention_author=True)
+        await ctx.reply(
+            f"API URL has been set to: {url}",
+            mention_author=True
+        )
 
     @commands.command()
     async def getapiurl(self, ctx):
@@ -159,7 +169,14 @@ class ImageGen(commands.Cog):
                         image.seek(0)
 
                         # Send the resized preview image
-                        await message.edit(attachments=[File(fp=image, filename=f"{task_id}.png")])
+                        await message.edit(
+                            attachments=[
+                                File(
+                                    fp=image,
+                                    filename=f"{task_id}.png"
+                                )
+                            ]
+                        )
 
                     if result["complete"]:
                         break
@@ -189,7 +206,14 @@ class ImageGen(commands.Cog):
                     image_data = base64.b64decode(base64_image)
                     image = BytesIO(image_data)
                     image.seek(0)
-                    await message.edit(attachments=[File(fp=image, filename=f"{new_task_id}.png")])
+                    await message.edit(
+                        attachments=[
+                            File(
+                                fp=image,
+                                filename=f"{new_task_id}.png"
+                            )
+                        ]
+                    )
 
                 if result["complete"]:
                     break
@@ -210,13 +234,19 @@ class ImageGen(commands.Cog):
 
         # Check if the user attached an image
         if len(ctx.message.attachments) == 0:
-            await ctx.reply("Please attach an image to use this command.", mention_author=True)
+            await ctx.reply(
+                "Please attach an image to use this command.",
+                mention_author=True
+            )
             return
 
         # Fetch the image from the attachment
         attachment = ctx.message.attachments[0]
         if not attachment.content_type.startswith('image/'):
-            await ctx.reply("Please attach a valid image file.", mention_author=True)
+            await ctx.reply(
+                "Please attach a valid image file.",
+                mention_author=True
+            )
             return
 
         # Download the image data
@@ -236,10 +266,17 @@ class ImageGen(commands.Cog):
 
         # Send the request to the tagger API
         try:
-            response = requests.post(f"{await self.config.api_url()}/tagger/v1/interrogate", json=payload, timeout=60)
+            response = requests.post(
+                f"{await self.config.api_url()}/tagger/v1/interrogate",
+                json=payload,
+                timeout=60
+            )
             response.raise_for_status()
         except requests.RequestException as e:
-            await ctx.reply(f"An error occurred while contacting the tagger API: {str(e)}", mention_author=True)
+            await ctx.reply(
+                f"An error occurred while contacting the tagger API: {str(e)}",
+                mention_author=True
+            )
             return
 
         # Parse the JSON response
@@ -247,7 +284,10 @@ class ImageGen(commands.Cog):
             data = response.json()
             tags = data.get("caption", {}).get("tag", {})
         except (ValueError, KeyError):
-            await ctx.reply("Failed to parse the response from the tagger API.", mention_author=True)
+            await ctx.reply(
+                "Failed to parse the response from the tagger API.",
+                mention_author=True
+            )
             return
 
         # Sort the tags by score (descending order)
@@ -262,7 +302,10 @@ class ImageGen(commands.Cog):
                 tag_string = tag_string[:last_comma_index]
 
         # Reply with the formatted tags in a code block
-        await ctx.reply(f"```\n{tag_string}\n```", mention_author=True)
+        await ctx.reply(
+            f"```\n{tag_string}\n```",
+            mention_author=True
+        )
 
     @commands.command(name="enhance")
     async def enhance(self, ctx, *, text: str):
@@ -271,13 +314,19 @@ class ImageGen(commands.Cog):
 
         # Check if the user attached an image
         if len(ctx.message.attachments) == 0:
-            await ctx.reply("Please attach an image to use this command.", mention_author=True)
+            await ctx.reply(
+                "Please attach an image to use this command.",
+                mention_author=True
+            )
             return
 
         # Fetch the image from the attachment
         attachment = ctx.message.attachments[0]
         if not attachment.content_type.startswith('image/'):
-            await ctx.reply("Please attach a valid image file.", mention_author=True)
+            await ctx.reply(
+                "Please attach a valid image file.",
+                mention_author=True
+            )
             return
 
         # Download the image data
@@ -319,31 +368,53 @@ class ImageGen(commands.Cog):
         }
 
         try:
-            response = requests.post(f"{await self.config.api_url()}/tagger/v1/interrogate", json=tagger_payload, timeout=60)
+            response = requests.post(
+                f"{await self.config.api_url()}/tagger/v1/interrogate",
+                json=tagger_payload,
+                timeout=60
+            )
             response.raise_for_status()
         except requests.RequestException as e:
-            await ctx.reply(f"An error occurred while contacting the tagger API: {str(e)}", mention_author=True)
+            await ctx.reply(
+                f"An error occurred while contacting the tagger API: {str(e)}",
+                mention_author=True
+            )
             return
 
         try:
             data = response.json()
             tags = data.get("caption", {}).get("tag", {})
         except (ValueError, KeyError):
-            await ctx.reply("Failed to parse the response from the tagger API.", mention_author=True)
+            await ctx.reply(
+                "Failed to parse the response from the tagger API.",
+                mention_author=True
+            )
             return
 
         # Generate a comma-separated string of tags
         loras = await self.config.channel(ctx.channel).loras()
         is_nsfw = ctx.channel.is_nsfw()
-        tag_list = [tag for tag, score in sorted(tags.items(), key=lambda x: x[1], reverse=True)]
+        tag_list = [
+            tag for tag, score in sorted(tags.items(),key=lambda x: x[1], reverse=True)
+        ]
     
+        common_negatives = [
+            "bad quality", "worst quality", "worst detail",
+            "sketch", "censor", "watermark", "signature"
+        ]
         if not is_nsfw:
             tag_list.insert(0, "general")
-            negative_prompt = "bad quality, worst quality, worst detail, sketch, censor, watermark, signature, nsfw, explicit"
-        else:
-            negative_prompt = "bad quality, worst quality, worst detail, sketch, censor, watermark, signature"
-    
-        positive_prompt = f"{loras}, masterpiece, best quality, amazing quality, " + ", ".join(tag_list).replace('_', ' ')
+            common_negatives += ["nsfw", "explicit"]
+        
+        negative_prompt = ", ".join(common_negatives)
+
+        positive_prompt = ", ".join([
+            loras,
+            "masterpiece",
+            "best quality",
+            "amazing quality",
+            *[tag.replace("_", " ") for tag in tag_list]
+        ])
 
         payload = {
             "init_images": [image_base64],
@@ -364,10 +435,17 @@ class ImageGen(commands.Cog):
 
         # Add the task to the ImageGenerator queue
         print(task_id, positive_prompt)
-        self.image_generator.new_task(task_id, payload, "img2img")
+        self.image_generator.new_task(
+            task_id,
+            payload,
+            "img2img"
+        )
 
         # Inform the user that the task has been submitted
-        message = await ctx.reply(f"Generating...", mention_author=True)
+        message = await ctx.reply(
+            f"Generating...",
+            mention_author=True
+        )
 
         # Wait for the image generation result and fetch it
         async with ctx.typing():
@@ -376,7 +454,9 @@ class ImageGen(commands.Cog):
                 result = self.image_generator.callback(task_id)
                 if result:
                     current_image_base64 = result["image"]
-                    if current_image_base64 != base64_image:  # Check if new image base64 string exists
+
+                    # Check if new image base64 string exists
+                    if current_image_base64 != base64_image:
                         base64_image = current_image_base64
                         # Decode the base64 string only when sending the image
                         image_data = base64.b64decode(base64_image)
@@ -384,11 +464,19 @@ class ImageGen(commands.Cog):
                         image.seek(0)
 
                         # Send the resized preview image
-                        await message.edit(attachments=[File(fp=image, filename=f"{task_id}.png")])
+                        await message.edit(
+                            attachments=[
+                                File(
+                                    fp=image,
+                                    filename=f"{task_id}.png"
+                                )
+                            ]
+                        )
 
                     if result["complete"]:
                         break
 
                 await asyncio.sleep(1)  # Poll every second
-        await message.edit(content="Done!")
-
+        await message.edit(
+            content="Done!"
+        )
