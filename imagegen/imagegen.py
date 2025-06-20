@@ -39,7 +39,7 @@ class ImageGen(commands.Cog):
 
     @commands.Cog.listener()
     async def on_ready(self):
-        # Set API URL when the bot is ready
+        """Set API URL when the bot is ready"""
         api_url = await self.config.api_url()
         self.image_generator.set_url(api_url)
 
@@ -73,48 +73,51 @@ class ImageGen(commands.Cog):
         """Generate images with the Stable Diffusion WebUI."""
         task_id = uuid.uuid4().hex
         tokens = [token.strip() for token in text.split(",")]
-        positive_prompt = []
-        negative_prompt = []
-        # Default to portrait dimensions and final resized resolution
-        width, height = 832, 1216
-        seed = -1  # default to random
-        strength = 0.5
-        steps = 20
+
+        prompt_config = {
+            "positive": [],
+            "negative": [],
+            "width": 832,
+            "height": 1216,
+            "seed": -1,
+            "steps": 20,
+        }
 
         for token in tokens:
             if "=" in token:
                 key, value = token.split("=", 1)
                 key, value = key.strip(), value.strip()
-                if key == "steps":
-                    steps = int(value)
-                elif key == "aspect":
-                    if value == "portrait":
-                        width, height = 832, 1216
-                    elif value == "square":
-                        width, height = 1024, 1024
-                    elif value == "landscape":
-                        width, height = 1216, 832
-                elif key == "seed":
-                    seed = int(value)
-                elif key == "strength":
-                    strength = float(value)
+                match key:
+                    case "steps":
+                        prompt_config["steps"] = int(value)
+                    case "aspect":
+                        if value == "portrait":
+                            prompt_config["width"], prompt_config["height"] = 832, 1216
+                        elif value == "square":
+                            prompt_config["width"], prompt_config["height"] = 1024, 1024
+                        elif value == "landscape":
+                            prompt_config["width"], prompt_config["height"] = 1216, 832
+                    case "seed":
+                        prompt_config["seed"] = int(value)
+                    case _:  # Skip unknown keys
+                        continue
             elif token.startswith("-"):
-                negative_prompt.append(token.lstrip("-").strip())
+                prompt_config["negative"].append(token.lstrip("-").strip())
             else:
-                positive_prompt.append(token)
+                prompt_config["positive"].append(token)
 
         loras = await self.config.channel(ctx.channel).loras()
         is_nsfw = ctx.channel.is_nsfw()
         if not is_nsfw:
-            positive_prompt.insert(0, "general")
-            negative_prompt.insert(0, "nsfw, explicit")
+            prompt_config["positive"].insert(0, "general")
+            prompt_config["negative"].insert(0, "nsfw, explicit")
 
         positive_prompt = ", ".join([
             loras,
             "masterpiece",
             "best quality",
             "amazing quality",
-            *positive_prompt
+            *prompt_config["positive"]
         ])
 
         negative_prompt = ", ".join([
@@ -125,67 +128,52 @@ class ImageGen(commands.Cog):
             "censor",
             "watermark",
             "signature",
-            *negative_prompt
+            *prompt_config["negative"]
         ])
 
-
-        # High-Resolution settings for the first Image (txt2img)
         payload = {
             "prompt": positive_prompt,
             "negative_prompt": negative_prompt,
-            "seed": seed,
-            "steps": steps,
-            "width": width,
-            "height": height,
+            "seed": prompt_config["seed"],
+            "steps": prompt_config["steps"],
+            "width": prompt_config["width"],
+            "height": prompt_config["height"],
             "cfg_scale": 4.5,
             "sampler_name": "Euler",
-            "scheduler" : "Karras",
+            "scheduler": "Karras",
             "batch_size": 1,
             "n_iter": 1,
             "force_task_id": task_id
         }
 
-        # Add the task to the ImageGenerator queue
         print(task_id, text)
         self.image_generator.new_task(task_id, payload, "txt2img")
 
-        # Inform the user that the task has been submitted
-        message = await ctx.reply(f"Generating...", mention_author=True)
+        message = await ctx.reply("Generating...", mention_author=True)
 
-        # Wait for the image generation result and fetch it
         async with ctx.typing():
-            base64_image = None  # to track the last image's base64 string
+            base64_image = None
             for _ in range(300):
                 result = self.image_generator.callback(task_id)
                 if result:
                     current_image_base64 = result["image"]
-
-                    # Check if new image base64 string exists
                     if current_image_base64 != base64_image:
                         base64_image = current_image_base64
-                        # Decode the base64 string only when sending the image
                         image_data = base64.b64decode(base64_image)
                         image = BytesIO(image_data)
                         image.seek(0)
-
-                        # Send the resized preview image
                         await message.edit(
                             attachments=[
-                                File(
-                                    fp=image,
-                                    filename=f"{task_id}.png"
-                                )
+                                File(fp=image, filename=f"{task_id}.png")
                             ]
                         )
-
                     if result["complete"]:
                         break
+                await asyncio.sleep(1)
 
-                await asyncio.sleep(1)  # Poll every second
-
-        # Add interactive buttons for "Accept", "Try Again", and "Delete"
         view = AcceptRetryDeleteButtons(self, ctx, task_id, payload, message)
         await message.edit(content="Done!", view=view)
+
 
     async def retry_task(self, new_task_id, view):
         """Handles retrying the image generation with the same payload."""
@@ -397,7 +385,7 @@ class ImageGen(commands.Cog):
         tag_list = [
             tag for tag, score in sorted(tags.items(),key=lambda x: x[1], reverse=True)
         ]
-    
+
         common_negatives = [
             "bad quality", "worst quality", "worst detail",
             "sketch", "censor", "watermark", "signature"
@@ -405,7 +393,7 @@ class ImageGen(commands.Cog):
         if not is_nsfw:
             tag_list.insert(0, "general")
             common_negatives += ["nsfw", "explicit"]
-        
+
         negative_prompt = ", ".join(common_negatives)
 
         positive_prompt = ", ".join([
