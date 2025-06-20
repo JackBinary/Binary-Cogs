@@ -57,6 +57,7 @@ class Jukebox(commands.Cog): # pylint: disable=too-many-instance-attributes
 
     @commands.group(invoke_without_command=True)
     async def jukebox(self, ctx: commands.Context):
+        """disambiguation"""
         await ctx.send_help()
 
     @jukebox.command(name="add")
@@ -167,61 +168,65 @@ class Jukebox(commands.Cog): # pylint: disable=too-many-instance-attributes
         if not task or task.done() or task.cancelled():
             self.players[guild_id] = self.bot.loop.create_task(self._playback_loop(ctx))
 
+    async def _cleanup_voice(self, ctx: commands.Context):
+        """Disconnects a broken voice client if needed."""
+        vc = ctx.voice_client
+        if vc and not vc.is_connected():
+            try:
+                await vc.disconnect(force=True)
+            except Exception as e:
+                print(f"[Jukebox] Cleanup error: {e}")
+
+    def _is_connected(self, guild: discord.Guild) -> bool:
+        vc = guild.voice_client
+        return vc is not None and vc.is_connected()
+
+    async def _prepare_audio(self, guild: discord.Guild, entry):
+        """Prepare the FFmpeg audio source and return it with metadata."""
+        is_dict = isinstance(entry, dict)
+        is_tts = is_dict and entry.get("tts", False)
+        volume_override = entry.get("volume") if is_dict else None
+        volume = volume_override or await self.config.guild(guild).volume()
+
+        if is_dict and "path" in entry:
+            song_path = entry["path"]
+            seek_time = entry.get("seek", 0)
+            ffmpeg_opts = {}
+            if seek_time:
+                ffmpeg_opts["before_options"] = f"-ss {seek_time}"
+            ffmpeg_opts["options"] = "-vn"
+            source = discord.FFmpegPCMAudio(song_path, **ffmpeg_opts)
+        else:
+            song_path = entry
+            source = discord.FFmpegPCMAudio(song_path)
+
+        return source, song_path, is_tts, volume
+
     async def _playback_loop(self, ctx: commands.Context):
         guild = ctx.guild
         guild_id = guild.id
         channel = ctx.author.voice.channel
 
-        # Force cleanup of broken connection before connecting
-        if ctx.voice_client and not ctx.voice_client.is_connected():
-            try:
-                await ctx.voice_client.disconnect(force=True)
-            except Exception:
-                pass
-
+        await self._cleanup_voice(ctx)
         voice = ctx.voice_client or await channel.connect()
 
         while True:
             try:
-                if not guild.voice_client or not guild.voice_client.is_connected():
+                if not self._is_connected(guild):
                     break
 
-                if not self.queue.get(guild_id):
+                if not self.queue.get(guild_id) or not self.queue[guild_id]:
                     await asyncio.sleep(1)
                     continue
 
-                if not self.queue[guild_id]:
-                    continue
-
                 entry = self.queue[guild_id].pop(0)
+                source, song_path, is_tts, volume = await self._prepare_audio(guild, entry)
 
-                # Handle dict entries for TTS, resume, volume, etc.
-                is_tts = isinstance(entry, dict) and entry.get("tts", False)
-                volume_override = entry.get("volume") if isinstance(entry, dict) else None
-
-                if isinstance(entry, dict) and "path" in entry:
-                    song_path = entry["path"]
-                    seek_time = entry.get("seek", 0)
-
-                    ffmpeg_opts = {}
-                    if seek_time:
-                        ffmpeg_opts["before_options"] = f"-ss {seek_time}"
-                    ffmpeg_opts["options"] = "-vn"
-
-                    source = discord.FFmpegPCMAudio(song_path, **ffmpeg_opts)
-                else:
-                    song_path = entry
-                    source = discord.FFmpegPCMAudio(song_path)
-
-                self.current_track[guild_id] = song_path
-
-                # Only reset start time for real music tracks
+                self.current_track[guild_id] = song_path if song_path else None
                 if not is_tts:
                     self.track_start_time[guild_id] = time.time()
 
-                volume = volume_override or await self.config.guild(guild).volume()
                 transformed = discord.PCMVolumeTransformer(source, volume=volume)
-
                 playback_done = asyncio.Event()
 
                 def after_playing(error):
@@ -231,19 +236,16 @@ class Jukebox(commands.Cog): # pylint: disable=too-many-instance-attributes
 
                 voice.play(transformed, after=after_playing)
 
-                if not is_tts:
+                if not is_tts and song_path:
                     await ctx.send(f"🎵 Now playing: `{Path(song_path).stem}`")
 
                 await playback_done.wait()
-
-                if not self.queue.get(guild_id):
-                    self.current_track[guild_id] = None
-                    continue
-
                 self.current_track[guild_id] = None
 
             except Exception as e:
+                print(f"[Jukebox] Playback error: {e}")
                 continue
+
         self.players.pop(guild.id, None)
 
     @jukebox.command(name="volume")
