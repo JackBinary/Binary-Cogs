@@ -1,3 +1,5 @@
+"""a simple music player that uses FFMPEG to play local tracks."""
+
 import asyncio
 import json
 import os
