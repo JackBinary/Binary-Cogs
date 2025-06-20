@@ -151,7 +151,7 @@ class ImageGen(commands.Cog):
                     current_image_base64 = result["image"]
 
                     # Check if new image base64 string exists
-                    if current_image_base64 != base64_image:  
+                    if current_image_base64 != base64_image:
                         base64_image = current_image_base64
                         # Decode the base64 string only when sending the image
                         image_data = base64.b64decode(base64_image)
@@ -293,10 +293,14 @@ class ImageGen(commands.Cog):
         def resize_image(width, height, max_pixels):
             """Resize the image while maintaining aspect ratio to not exceed max_pixels."""
             if width * height > max_pixels:
-                scale_factor = (max_pixels / (width * height)) ** 0.5  # Square root to maintain aspect ratio
+
+                # Square root to maintain aspect ratio
+                scale_factor = (max_pixels / (width * height)) ** 0.5
                 new_width = int(width * scale_factor)
                 new_height = int(height * scale_factor)
-                return max(64, new_width // 32 * 32), max(64, new_height // 32 * 32)  # Ensure dimensions are multiples of 32
+
+                # Ensure dimensions are multiples of 32
+                return max(64, new_width // 32 * 32), max(64, new_height // 32 * 32)
             return width, height
 
         # Apply resolution constraint
