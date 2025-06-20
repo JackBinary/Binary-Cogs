@@ -15,7 +15,6 @@ try:
 except (ImportError, ModuleNotFoundError):
     HAS_PARAMIKO = False
 
-
 class InteractiveShell(commands.Cog):
     """A cog for an interactive shell session."""
 
@@ -81,77 +80,6 @@ class InteractiveShell(commands.Cog):
                 await ctx.send(f"Unexpected error: {e}")
                 break
 
-
-    if HAS_PARAMIKO:
-        @commands.command()
-        @commands.is_owner()
-        async def start_ssh(self, ctx, ip: str, username: str, password: str):
-            """Start an SSH session."""
-            self.log_attempt(ctx.author, "SSH")
-
-            if ctx.author.id in self.ssh_clients:
-                await ctx.send("You already have an active SSH session.")
-                return
-
-            try:
-                client = paramiko.SSHClient()
-                client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-                client.connect(ip, username=username, password=password)
-                self.ssh_clients[ctx.author.id] = client
-                await ctx.send(
-                    f"Connected to {ip} as {username}. "
-                    "Type 'exit' or use '[p]end_ssh' to end the session."
-                )
-            except paramiko.AuthenticationException:
-                await ctx.send("Authentication failed. Check your username and password.")
-                return
-            except paramiko.SSHException as e:
-                await ctx.send(f"SSH error: {e}")
-                return
-            except OSError as e:
-                await ctx.send(f"Network or hostname error: {e}")
-                return
-            except Exception as e:  # pylint: disable=broad-exception-caught
-                await ctx.send(f"Unexpected error during connection: {e}")
-                return
-
-            while True:
-                def check(m):
-                    return m.author == ctx.author and m.channel == ctx.channel
-
-                try:
-                    message = await self.bot.wait_for("message", check=check)
-                    if message.content.strip().lower() == "exit":
-                        client.close()
-                        await ctx.send("Ending SSH session.")
-                        del self.ssh_clients[ctx.author.id]
-                        break
-
-                    _, stdout, stderr = client.exec_command(message.content)
-                    output = stdout.read().decode() + stderr.read().decode()
-
-                    if len(output) > 2000:
-                        await ctx.send("Output too long to display, sending as a file.")
-                        buffer = io.BytesIO(output.encode())
-                        buffer.seek(0)
-                        await ctx.send(file=discord.File(fp=buffer, filename="ssh_output.txt"))
-                    else:
-                        await ctx.send(f"```\n{output}\n```")
-
-                except UnicodeDecodeError:
-                    await ctx.send("Received output could not be decoded (non-UTF-8).")
-                    continue
-                except paramiko.SSHException as e:
-                    await ctx.send(f"SSH command error: {e}")
-                    break
-                except asyncio.CancelledError:
-                    await ctx.send("SSH session was cancelled.")
-                    break
-                except Exception as e:  # pylint: disable=broad-exception-caught
-                    await ctx.send(f"Unexpected error during session: {e}")
-                    break
-
-
     @commands.Cog.listener()
     async def on_message(self, message):
         """Handle incoming messages for active shell sessions."""
@@ -195,6 +123,10 @@ class InteractiveShell(commands.Cog):
             await ctx.send("Ending SSH session.")
             del self.ssh_clients[ctx.author.id]
 
+# Patch in SSH commands if available
+if HAS_PARAMIKO:
+    from . import ssh_handler  # pylint: disable=import-outside-toplevel
+    ssh_handler.add_ssh_commands(InteractiveShell)
 
 def setup(bot):
     """Redbot entry point."""
