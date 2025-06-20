@@ -34,8 +34,9 @@ class InteractiveShell(commands.Cog):
                     f"{datetime.utcnow().isoformat()} - {user} "
                     f"(ID: {user.id}) attempted to start a {session_type} session.\n"
                 )
-        except Exception:
-            pass
+        except OSError:
+        # Suppressed log failure, common in readonly containers
+        pass
 
     @commands.command()
     @commands.is_owner()
@@ -67,9 +68,19 @@ class InteractiveShell(commands.Cog):
                     await ctx.send("Shell session has ended.")
                     del self.sessions[ctx.author.id]
                     break
-            except Exception as e:
-                await ctx.send(f"An error occurred: {e}")
+            except asyncio.CancelledError:
+                await ctx.send("Shell session was cancelled.")
                 break
+            except (ConnectionResetError, BrokenPipeError) as e:
+                await ctx.send(f"Shell process error: {e}")
+                break
+            except UnicodeDecodeError:
+                await ctx.send("Failed to decode shell output.")
+                break
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                await ctx.send(f"Unexpected error: {e}")
+                break
+
 
     if HAS_PARAMIKO:
         @commands.command()
@@ -88,11 +99,20 @@ class InteractiveShell(commands.Cog):
                 client.connect(ip, username=username, password=password)
                 self.ssh_clients[ctx.author.id] = client
                 await ctx.send(
-                    f"Connected to {ip} as {username}. " +
+                    f"Connected to {ip} as {username}. "
                     "Type 'exit' or use '[p]end_ssh' to end the session."
                 )
-            except Exception as e:
-                await ctx.send(f"Failed to connect: {e}")
+            except paramiko.AuthenticationException:
+                await ctx.send("Authentication failed. Check your username and password.")
+                return
+            except paramiko.SSHException as e:
+                await ctx.send(f"SSH error: {e}")
+                return
+            except OSError as e:
+                await ctx.send(f"Network or hostname error: {e}")
+                return
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                await ctx.send(f"Unexpected error during connection: {e}")
                 return
 
             while True:
@@ -117,9 +137,20 @@ class InteractiveShell(commands.Cog):
                         await ctx.send(file=discord.File(fp=buffer, filename="ssh_output.txt"))
                     else:
                         await ctx.send(f"```\n{output}\n```")
-                except Exception as e:
-                    await ctx.send(f"An error occurred: {e}")
+
+                except UnicodeDecodeError:
+                    await ctx.send("Received output could not be decoded (non-UTF-8).")
+                    continue
+                except paramiko.SSHException as e:
+                    await ctx.send(f"SSH command error: {e}")
                     break
+                except asyncio.CancelledError:
+                    await ctx.send("SSH session was cancelled.")
+                    break
+                except Exception as e:  # pylint: disable=broad-exception-caught
+                    await ctx.send(f"Unexpected error during session: {e}")
+                    break
+
 
     @commands.Cog.listener()
     async def on_message(self, message):
