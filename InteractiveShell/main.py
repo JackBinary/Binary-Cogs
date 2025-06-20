@@ -6,12 +6,13 @@ from datetime import datetime
 from redbot.core import commands
 from redbot.core.bot import Red
 
-# Attempt to import paramiko
+# Attempt to import optional SSH handler
 try:
     from . import ssh_handler
     HAS_PARAMIKO = True
 except (ImportError, ModuleNotFoundError):
     HAS_PARAMIKO = False
+
 
 class InteractiveShell(commands.Cog):
     """A cog for an interactive shell session."""
@@ -107,23 +108,11 @@ class InteractiveShell(commands.Cog):
         await ctx.send("Ending shell session.")
         del self.sessions[ctx.author.id]
 
-    if HAS_PARAMIKO:
-        @commands.command()
-        @commands.is_owner()
-        async def end_ssh(self, ctx):
-            """End the interactive SSH session."""
-            if ctx.author.id not in self.ssh_clients:
-                await ctx.send("You do not have an active SSH session.")
-                return
-
-            client = self.ssh_clients[ctx.author.id]
-            client.close()
-            await ctx.send("Ending SSH session.")
-            del self.ssh_clients[ctx.author.id]
 
 # Patch in SSH commands if available
 if HAS_PARAMIKO:
-    ssh_handler.add_ssh_commands(InteractiveShell)
+    ssh_handler.add_ssh_commands(InteractiveShell)  # pylint: disable=import-outside-toplevel
+
 
 def setup(bot):
     """Redbot entry point."""
