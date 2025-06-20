@@ -1,17 +1,19 @@
-import uuid
+"""Cog for generating images using Stable Diffusion WebUI API."""
+
+import asyncio
 import base64
-import requests
-import threading
-from time import sleep
+import uuid
 from io import BytesIO
+
+import requests
 from PIL import Image
-from discord import File, ButtonStyle, ui, Interaction
+from discord import File
 from redbot.core import commands
 from redbot.core.config import Config
-import asyncio
 
 from .generator import ImageGenerator
 from .ui_components import AcceptRetryDeleteButtons
+
 
 class ImageGen(commands.Cog):
     """Cog for generating images using Stable Diffusion WebUI API with ImageGenerator."""
