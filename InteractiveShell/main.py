@@ -1,16 +1,14 @@
 """Main module for the InteractiveShell cog."""
 
 import asyncio
-import io
 from datetime import datetime
 
-import discord
 from redbot.core import commands
 from redbot.core.bot import Red
 
 # Attempt to import paramiko
 try:
-    import paramiko
+    from . import ssh_handler
     HAS_PARAMIKO = True
 except (ImportError, ModuleNotFoundError):
     HAS_PARAMIKO = False
@@ -125,7 +123,6 @@ class InteractiveShell(commands.Cog):
 
 # Patch in SSH commands if available
 if HAS_PARAMIKO:
-    from . import ssh_handler  # pylint: disable=import-outside-toplevel
     ssh_handler.add_ssh_commands(InteractiveShell)
 
 def setup(bot):
