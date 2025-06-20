@@ -69,7 +69,7 @@ class ImageGen(commands.Cog):
         await ctx.reply(f"The current API URL is: {api_url}", mention_author=True)
 
     @commands.command(name="draw")
-    async def draw(self, ctx, *, text: str): # pylint: disable=too-many-locals
+    async def draw(self, ctx, *, text: str): # pylint: disable=too-many-locals, too-many-statements
         """Generate images with the Stable Diffusion WebUI."""
         task_id = uuid.uuid4().hex
         tokens = [token.strip() for token in text.split(",")]
@@ -296,7 +296,7 @@ class ImageGen(commands.Cog):
         )
 
     @commands.command(name="enhance")
-    async def enhance(self, ctx, *, text: str):
+    async def enhance(self, ctx, *, text: str):  # pylint: disable=too-many-locals, too-many-statements
         """Redraw an uploaded image using the Stable Diffusion img2img endpoint."""
         task_id = uuid.uuid4().hex
 
@@ -318,7 +318,7 @@ class ImageGen(commands.Cog):
         MAX_PIXELS = 2359296
 
         def resize_image(width, height, min_pixels, max_pixels):
-            """Resize the image to fit within min/max pixel bounds while maintaining aspect ratio."""
+            """Resize the image to fit within pixel bounds while maintaining aspect ratio."""
             original_pixels = width * height
 
             if original_pixels > max_pixels:
@@ -358,7 +358,10 @@ class ImageGen(commands.Cog):
             data = response.json()
             tags = data.get("caption", {}).get("tag", {})
         except (ValueError, KeyError):
-            await ctx.reply("Failed to parse the response from the tagger API.", mention_author=True)
+            await ctx.reply(
+                "Failed to parse the response from the tagger API.",
+                mention_author=True
+            )
             return
 
         loras = await self.config.channel(ctx.channel).loras()
