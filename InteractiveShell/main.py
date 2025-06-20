@@ -88,7 +88,8 @@ class InteractiveShell(commands.Cog):
                 client.connect(ip, username=username, password=password)
                 self.ssh_clients[ctx.author.id] = client
                 await ctx.send(
-                    f"Connected to {ip} as {username}. Type 'exit' or use '[p]end_ssh' to end the session."
+                    f"Connected to {ip} as {username}. " +
+                    "Type 'exit' or use '[p]end_ssh' to end the session."
                 )
             except Exception as e:
                 await ctx.send(f"Failed to connect: {e}")
