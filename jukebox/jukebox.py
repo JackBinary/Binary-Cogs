@@ -20,15 +20,19 @@ from redbot.core import commands, Config
 DEFAULT_VOLUME = 1.0
 
 def sanitize_filename(name: str) -> str:
+    """Removes invalid characters from filenames"""
     return re.sub(r'[\\/*?:"<>|]', '_', name)
 
 def chunk_list(data, size):
+    """Chunks list to keep messages from being too long"""
     for i in range(0, len(data), size):
         yield data[i:i + size]
 
 
-class Jukebox(commands.Cog):
-    def __init__(self, bot):
+class Jukebox(commands.Cog): # pylint: disable=too-many-instance-attributes
+    """a simple music player that uses FFMPEG to play local tracks."""
+
+    def __init__(self, bot): 
         self.bot = bot
         self.data_path = Path(__file__).parent / "data"
         self.library_path = self.data_path / "jukebox_library"
@@ -49,8 +53,7 @@ class Jukebox(commands.Cog):
                 subprocess.run(["apt", "update"], check=True)
                 subprocess.run(["apt", "install", "-y", "ffmpeg"], check=True)
             except subprocess.CalledProcessError as e:
-                raise RuntimeError(f"Failed to install ffmpeg: {e}")
-
+                raise RuntimeError(f"Failed to install ffmpeg: {e}") from e
 
     @commands.group(invoke_without_command=True)
     async def jukebox(self, ctx: commands.Context):
@@ -131,7 +134,9 @@ class Jukebox(commands.Cog):
 
             while True:
                 try:
-                    reaction, user = await self.bot.wait_for("reaction_add", timeout=30.0, check=check)
+                    reaction, user = await self.bot.wait_for(
+                        "reaction_add", timeout=30.0, check=check
+                    )
                     try:
                         await message.remove_reaction(reaction, user)
                     except discord.Forbidden:
@@ -249,7 +254,7 @@ class Jukebox(commands.Cog):
             await ctx.send(f"🔊 Current volume: `{vol:.2f}`")
             return
 
-        if not (0.0 <= value <= 2.0):
+        if not 0.0 <= value <= 2.0:
             await ctx.send("Please choose a volume between 0.0 and 2.0.")
             return
 
@@ -352,7 +357,9 @@ class Jukebox(commands.Cog):
 
             while True:
                 try:
-                    reaction, user = await self.bot.wait_for("reaction_add", timeout=30.0, check=check)
+                    reaction, user = await self.bot.wait_for(
+                        "reaction_add", timeout=30.0, check=check
+                    )
                     try:
                         await message.remove_reaction(reaction, user)
                     except discord.Forbidden:
