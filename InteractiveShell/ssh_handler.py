@@ -1,3 +1,5 @@
+"""Optional SSH session support for the InteractiveShell cog."""
+
 import asyncio
 import io
 import discord
@@ -5,9 +7,10 @@ import paramiko
 
 DISCORD_CHAR_LIMIT = 2000
 
+
 def add_ssh_commands(cls):
-    @cls.command()
-    @cls.is_owner()
+    """Dynamically attach SSH command methods to the given cog class."""
+
     async def start_ssh(self, ctx, ip: str, username: str, password: str):
         """Start an SSH session."""
         self.log_attempt(ctx.author, "SSH")
@@ -16,27 +19,18 @@ def add_ssh_commands(cls):
             await ctx.send("You already have an active SSH session.")
             return
 
-        try:
-            client = paramiko.SSHClient()
-            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            client.connect(ip, username=username, password=password)
-            self.ssh_clients[ctx.author.id] = client
-            await ctx.send(
-                f"Connected to {ip} as {username}. "
-                "Type 'exit' or use '[p]end_ssh' to end the session."
-            )
-            await self._handle_ssh_session(ctx, client)
-        except paramiko.AuthenticationException:
-            await ctx.send("Authentication failed. Check your username and password.")
-        except paramiko.SSHException as e:
-            await ctx.send(f"SSH error: {e}")
-        except OSError as e:
-            await ctx.send(f"Network or hostname error: {e}")
-        except Exception as e:  # pylint: disable=broad-exception-caught
-            await ctx.send(f"Unexpected error during connection: {e}")
+        client = await _connect_ssh(ctx, ip, username, password)
+        if client is None:
+            return
 
-    @cls.command()
-    @cls.is_owner()
+        self.ssh_clients[ctx.author.id] = client
+        await ctx.send(
+            f"Connected to {ip} as {username}. "
+            "Type 'exit' or use '[p]end_ssh' to end the session."
+        )
+
+        await self.handle_ssh_session(ctx, client)
+
     async def end_ssh(self, ctx):
         """End the interactive SSH session."""
         if ctx.author.id not in self.ssh_clients:
@@ -48,7 +42,7 @@ def add_ssh_commands(cls):
         await ctx.send("Ending SSH session.")
         del self.ssh_clients[ctx.author.id]
 
-    async def _handle_ssh_session(self, ctx, client):
+    async def handle_ssh_session(self, ctx, client):
         """Handle interactive SSH command input from a user."""
         def check(m):
             return m.author == ctx.author and m.channel == ctx.channel
@@ -66,10 +60,7 @@ def add_ssh_commands(cls):
                 output = stdout.read().decode() + stderr.read().decode()
 
                 if len(output) > DISCORD_CHAR_LIMIT:
-                    await ctx.send("Output too long to display, sending as a file.")
-                    buffer = io.BytesIO(output.encode())
-                    buffer.seek(0)
-                    await ctx.send(file=discord.File(fp=buffer, filename="ssh_output.txt"))
+                    await _send_output_as_file(ctx, output)
                 else:
                     await ctx.send(f"```\n{output}\n```")
 
@@ -88,4 +79,29 @@ def add_ssh_commands(cls):
 
     cls.start_ssh = start_ssh
     cls.end_ssh = end_ssh
-    cls._handle_ssh_session = _handle_ssh_session
+    cls.handle_ssh_session = handle_ssh_session
+
+
+async def _connect_ssh(ctx, ip, username, password):
+    """Try to connect to an SSH server and return the client object if successful."""
+    try:
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        client.connect(ip, username=username, password=password)
+        return client
+    except paramiko.AuthenticationException:
+        await ctx.send("Authentication failed. Check your username and password.")
+    except paramiko.SSHException as e:
+        await ctx.send(f"SSH error: {e}")
+    except OSError as e:
+        await ctx.send(f"Network or hostname error: {e}")
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        await ctx.send(f"Unexpected error during connection: {e}")
+    return None
+
+
+async def _send_output_as_file(ctx, output):
+    """Send long SSH output as a file attachment."""
+    buffer = io.BytesIO(output.encode())
+    buffer.seek(0)
+    await ctx.send(file=discord.File(fp=buffer, filename="ssh_output.txt"))
