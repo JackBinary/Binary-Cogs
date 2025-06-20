@@ -1,3 +1,4 @@
+# pylint: disable=too-many-arguments, too-many-positional-arguments, unused-argument
 """UI components for image generation interactions in Discord."""
 
 import uuid
