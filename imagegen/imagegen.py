@@ -98,7 +98,7 @@ class ImageGen(commands.Cog):
         if not is_nsfw:
             positive_prompt.insert(0, "general")
             negative_prompt.insert(0, "nsfw, explicit")
-        
+
         positive_prompt = f"{loras}, masterpiece, best quality, amazing quality, " + ', '.join(positive_prompt)
         negative_prompt = "bad quality, worst quality, worst detail, sketch, censor, watermark, signature, " + ', '.join(negative_prompt)
 
@@ -138,13 +138,13 @@ class ImageGen(commands.Cog):
                         image_data = base64.b64decode(base64_image)
                         image = BytesIO(image_data)
                         image.seek(0)
-                        
+
                         # Send the resized preview image
                         await message.edit(attachments=[File(fp=image, filename=f"{task_id}.png")])
-    
+
                     if result["complete"]:
                         break
-    
+
                 await asyncio.sleep(1)  # Poll every second
 
         # Add interactive buttons for "Accept", "Try Again", and "Delete"
@@ -154,7 +154,7 @@ class ImageGen(commands.Cog):
     async def retry_task(self, new_task_id, view):
         """Handles retrying the image generation with the same payload."""
         ctx, payload, message, = view.ctx, view.payload, view.message
-        
+
         payload["force_task_id"] = new_task_id  # Set the new task ID for retry
         self.image_generator.new_task(new_task_id, payload, "txt2img")
         await message.edit(content="Generating...")
@@ -188,24 +188,24 @@ class ImageGen(commands.Cog):
     @commands.command(name="tags")
     async def tags(self, ctx):
         """Process the attached image, send it to the tagger API, and return sorted tags."""
-        
+
         # Check if the user attached an image
         if len(ctx.message.attachments) == 0:
             await ctx.reply("Please attach an image to use this command.", mention_author=True)
             return
-        
+
         # Fetch the image from the attachment
         attachment = ctx.message.attachments[0]
         if not attachment.content_type.startswith('image/'):
             await ctx.reply("Please attach a valid image file.", mention_author=True)
             return
-        
+
         # Download the image data
         image_data = await attachment.read()
-        
+
         # Convert the image to base64
         image_base64 = base64.b64encode(image_data).decode("utf-8")
-        
+
         # Prepare the payload for the tagger API
         payload = {
             "image": image_base64,
@@ -214,7 +214,7 @@ class ImageGen(commands.Cog):
             "queue": "",
             "name_in_queue": ""
         }
-        
+
         # Send the request to the tagger API
         try:
             response = requests.post(f"{await self.config.api_url()}/tagger/v1/interrogate", json=payload, timeout=60)
@@ -222,7 +222,7 @@ class ImageGen(commands.Cog):
         except requests.RequestException as e:
             await ctx.reply(f"An error occurred while contacting the tagger API: {str(e)}", mention_author=True)
             return
-        
+
         # Parse the JSON response
         try:
             data = response.json()
@@ -230,10 +230,10 @@ class ImageGen(commands.Cog):
         except (ValueError, KeyError):
             await ctx.reply("Failed to parse the response from the tagger API.", mention_author=True)
             return
-        
+
         # Sort the tags by score (descending order)
         sorted_tags = sorted(tags.items(), key=lambda x: x[1], reverse=True)
-        
+
         # Generate a comma-separated string of tags
         tag_string = ", ".join([tag for tag, score in sorted_tags]).replace('_',' ')
         if len(tag_string) >= 3990:
@@ -241,36 +241,36 @@ class ImageGen(commands.Cog):
             last_comma_index = tag_string.rfind(',')
             if last_comma_index != -1:
                 tag_string = tag_string[:last_comma_index]
-        
+
         # Reply with the formatted tags in a code block
         await ctx.reply(f"```\n{tag_string}\n```", mention_author=True)
-    
+
     @commands.command(name="enhance")
     async def enhance(self, ctx, *, text: str):
         """Redraw an uploaded image using the Stable Diffusion img2img endpoint."""
         task_id = uuid.uuid4().hex
-    
+
         # Check if the user attached an image
         if len(ctx.message.attachments) == 0:
             await ctx.reply("Please attach an image to use this command.", mention_author=True)
             return
-    
+
         # Fetch the image from the attachment
         attachment = ctx.message.attachments[0]
         if not attachment.content_type.startswith('image/'):
             await ctx.reply("Please attach a valid image file.", mention_author=True)
             return
-    
+
         # Download the image data
         image_data = await attachment.read()
-    
+
         # Open the image to determine dimensions
         with BytesIO(image_data) as img_buffer:
             img = Image.open(img_buffer)
             orig_width, orig_height = img.size
-    
+
         MAX_PIXELS = 2359296  # Max allowed total pixels
-    
+
         def resize_image(width, height, max_pixels):
             """Resize the image while maintaining aspect ratio to not exceed max_pixels."""
             if width * height > max_pixels:
@@ -279,13 +279,13 @@ class ImageGen(commands.Cog):
                 new_height = int(height * scale_factor)
                 return max(64, new_width // 32 * 32), max(64, new_height // 32 * 32)  # Ensure dimensions are multiples of 32
             return width, height
-    
+
         # Apply resolution constraint
         new_width, new_height = resize_image(orig_width, orig_height, MAX_PIXELS)
-    
+
         # Convert the image to base64
         image_base64 = base64.b64encode(image_data).decode("utf-8")
-    
+
         # Prepare the payload for the tagger API to get tags
         tagger_payload = {
             "image": image_base64,
@@ -294,34 +294,34 @@ class ImageGen(commands.Cog):
             "queue": "",
             "name_in_queue": ""
         }
-    
+
         try:
             response = requests.post(f"{await self.config.api_url()}/tagger/v1/interrogate", json=tagger_payload, timeout=60)
             response.raise_for_status()
         except requests.RequestException as e:
             await ctx.reply(f"An error occurred while contacting the tagger API: {str(e)}", mention_author=True)
             return
-    
+
         try:
             data = response.json()
             tags = data.get("caption", {}).get("tag", {})
         except (ValueError, KeyError):
             await ctx.reply("Failed to parse the response from the tagger API.", mention_author=True)
             return
-    
+
         # Generate a comma-separated string of tags
         loras = await self.config.channel(ctx.channel).loras()
         is_nsfw = ctx.channel.is_nsfw()
         tag_list = [tag for tag, score in sorted(tags.items(), key=lambda x: x[1], reverse=True)]
-        
+    
         if not is_nsfw:
             tag_list.insert(0, "general")
             negative_prompt = "bad quality, worst quality, worst detail, sketch, censor, watermark, signature, nsfw, explicit"
         else:
             negative_prompt = "bad quality, worst quality, worst detail, sketch, censor, watermark, signature"
-        
-        positive_prompt = f"{loras}, masterpiece, best quality, amazing quality, " + ", ".join(tag_list).replace('_', ' ')
     
+        positive_prompt = f"{loras}, masterpiece, best quality, amazing quality, " + ", ".join(tag_list).replace('_', ' ')
+
         payload = {
             "init_images": [image_base64],
             "prompt": positive_prompt,
@@ -338,14 +338,14 @@ class ImageGen(commands.Cog):
             "force_task_id": task_id,
             "denoising_strength": float(text) if text else 0.4
         }
-    
+
         # Add the task to the ImageGenerator queue
         print(task_id, positive_prompt)
         self.image_generator.new_task(task_id, payload, "img2img")
-    
+
         # Inform the user that the task has been submitted
         message = await ctx.reply(f"Generating...", mention_author=True)
-    
+
         # Wait for the image generation result and fetch it
         async with ctx.typing():
             base64_image = None  # to track the last image's base64 string
@@ -359,13 +359,13 @@ class ImageGen(commands.Cog):
                         image_data = base64.b64decode(base64_image)
                         image = BytesIO(image_data)
                         image.seek(0)
-    
+
                         # Send the resized preview image
                         await message.edit(attachments=[File(fp=image, filename=f"{task_id}.png")])
-    
+
                     if result["complete"]:
                         break
-    
+
                 await asyncio.sleep(1)  # Poll every second
         await message.edit(content="Done!")
-    
+
