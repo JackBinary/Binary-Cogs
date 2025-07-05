@@ -38,7 +38,7 @@ class Jukebox(commands.Cog): # pylint: disable=too-many-instance-attributes
         self.library_path.mkdir(parents=True, exist_ok=True)
 
         self.config = Config.get_conf(self, identifier=0xF00DCAFE, force_registration=True)
-        self.config.register_guild(tts_voice="en-US-AriaNeural")
+        self.config.register_user(tts_voice="en-US-AriaNeural")
         self.config.register_guild(volume=DEFAULT_VOLUME)
 
         self.queue = {}       # guild_id: asyncio.Queue[str]
@@ -555,7 +555,7 @@ class Jukebox(commands.Cog): # pylint: disable=too-many-instance-attributes
             current_pos = max(0, int(current_pos))
 
         # Get TTS voice
-        tts_voice = await self.config.guild(guild).tts_voice()
+        tts_voice = await self.config.user(ctx.author).tts_voice()
         if not tts_voice:
             tts_voice = "en-US-AriaNeural"
 
@@ -605,12 +605,12 @@ class Jukebox(commands.Cog): # pylint: disable=too-many-instance-attributes
     async def ttsvoice(self, ctx: commands.Context, *, voice: Optional[str] = None):
         """Set or display the current TTS voice (e.g. en-US-AriaNeural)."""
         if voice is None:
-            current = await self.config.guild(ctx.guild).tts_voice()
+            current = await self.config.user(ctx.author).tts_voice()
             if current:
                 await ctx.send(f"🗣️ Current TTS voice: `{current}`")
             else:
                 await ctx.send("⚠️ No TTS voice set. Default will be used.")
             return
 
-        await self.config.guild(ctx.guild).tts_voice.set(voice)
+        await self.config.user(ctx.author).tts_voice.set(voice)
         await ctx.send(f"✅ TTS voice set to `{voice}`")
