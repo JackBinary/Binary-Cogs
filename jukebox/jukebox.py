@@ -38,7 +38,7 @@ class Jukebox(commands.Cog): # pylint: disable=too-many-instance-attributes
         self.library_path.mkdir(parents=True, exist_ok=True)
 
         self.config = Config.get_conf(self, identifier=0xF00DCAFE, force_registration=True)
-        self.config.register_user(tts_voice="en-US-AriaNeural", tts_pitch="default")
+        self.config.register_user(tts_voice="en-US-AriaNeural")
         self.config.register_guild(volume=DEFAULT_VOLUME)
 
         self.queue = {}       # guild_id: asyncio.Queue[str]
@@ -556,17 +556,14 @@ class Jukebox(commands.Cog): # pylint: disable=too-many-instance-attributes
 
         # Get TTS voice
         tts_voice = await self.config.user(ctx.author).tts_voice()
-        tts_pitch = await self.config.user(ctx.author).tts_pitch()
-        
         if not tts_voice:
             tts_voice = "en-US-AriaNeural"
-        
-        ssml = f'<speak><prosody pitch="{tts_pitch}">{discord.utils.escape_mentions(discord.utils.escape_markdown(text))}</prosody></speak>'
-        
+
+        # Generate TTS audio using edge-tts
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as f:
             tts_path = f.name
         try:
-            communicate = edge_tts.Communicate(ssml, tts_voice, is_ssml=True)
+            communicate = edge_tts.Communicate(text, tts_voice)
             await communicate.save(tts_path)
         except Exception as e: # pylint: disable=broad-exception-caught
             os.unlink(tts_path)
@@ -617,19 +614,3 @@ class Jukebox(commands.Cog): # pylint: disable=too-many-instance-attributes
 
         await self.config.user(ctx.author).tts_voice.set(voice)
         await ctx.send(f"✅ TTS voice set to `{voice}`")
-
-    @commands.command(name="ttspitch")
-    async def ttspitch(self, ctx: commands.Context, *, pitch: Optional[str] = None):
-        """Set or view your TTS pitch (e.g. default, +20Hz, -2st)."""
-        if pitch is None:
-            current = await self.config.user(ctx.author).tts_pitch()
-            await ctx.send(f"🎵 Your current pitch is: `{current}`")
-            return
-    
-        # Basic validation (optional)
-        if not re.match(r"^(default|[\+\-]\d+(Hz|st))$", pitch):
-            await ctx.send("⚠️ Invalid pitch format. Use something like `+20Hz`, `-2st`, or `default`.")
-            return
-    
-        await self.config.user(ctx.author).tts_pitch.set(pitch)
-        await ctx.send(f"✅ Pitch set to `{pitch}`")
