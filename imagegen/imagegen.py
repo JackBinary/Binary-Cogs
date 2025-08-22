@@ -72,7 +72,10 @@ class ImageGen(commands.Cog):
     async def draw(self, ctx, *, text: str): # pylint: disable=too-many-locals, too-many-statements
         """Generate images with the Stable Diffusion WebUI."""
         task_id = uuid.uuid4().hex
-        tokens = [token.strip() for token in text.split(",")]
+
+        tokens: list[str] = []
+        for tok in [token.strip() for token in text.split(",")]:
+            tokens.extend(self._expand_amp_token(tok, guild_shortcuts))
 
         prompt_config = {
             "positive": [],
@@ -216,6 +219,28 @@ class ImageGen(commands.Cog):
             child.disabled = False
 
         await message.edit(view=view)
+
+    def _expand_amp_token(self, token: str, shortcuts: dict[str, str]) -> list[str]:
+        """
+        If token starts with &name, return a list of subtokens from the shortcut definition.
+        Otherwise, return [token].
+        No recursive expansion: & appearing inside the shortcut body is treated as a literal.
+        """
+        if not token.startswith("&"):
+            return [token]
+    
+        name = token[1:].strip().lower()
+        if not name:
+            return [token]
+    
+        shortcut = shortcuts.get(name)
+        if not shortcut:
+            # Unknown shortcut: leave literal token so the user can see it didn't expand
+            return [token]
+    
+        # Split into subtokens (comma-separated), trim whitespace
+        subtokens = [t.strip() for t in shortcut.split(",") if t.strip()]
+        return subtokens or []
 
     @commands.command(name="tags")
     async def tags(self, ctx):
@@ -427,4 +452,71 @@ class ImageGen(commands.Cog):
                         break
                 await asyncio.sleep(1)
 
+    
+
         await message.edit(content="Done!")
+
+    @commands.group(name="shortcut")
+    async def shortcut(self, ctx):
+        """Manage prompt shortcuts."""
+        if ctx.invoked_subcommand is None:
+            await ctx.send_help(ctx.command)
+
+    @shortcut.command(name="add")
+    async def shortcut_add(self, ctx, name: str, *, tags: str):
+        """Register or update a shortcut."""
+        name_key = name.strip().lower()
+        if not name_key:
+            await ctx.reply("Shortcut name cannot be empty.", mention_author=True)
+            return
+
+        reserved = {"steps", "seed", "aspect"}
+        if name_key in reserved:
+            await ctx.reply("That name is reserved. Choose a different shortcut name.", mention_author=True)
+            return
+
+        async with self.config.guild(ctx.guild).shortcuts() as sc:
+            sc[name_key] = tags.strip()
+
+        await ctx.reply(f"Shortcut **&{name_key}** saved:\n```\n{tags.strip()}\n```", mention_author=True)
+
+    @shortcut.command(name="show")
+    async def shortcut_show(self, ctx, name: str):
+        """Show the tags stored for a shortcut."""
+        sc = await self.config.guild(ctx.guild).shortcuts()
+        key = name.strip().lower()
+        if key in sc:
+            await ctx.reply(f"**&{key}**:\n```\n{sc[key]}\n```", mention_author=True)
+        else:
+            await ctx.reply(f"No shortcut named **&{key}**.", mention_author=True)
+
+    @shortcut.command(name="list")
+    async def shortcut_list(self, ctx):
+        """List all shortcuts in this server."""
+        sc = await self.config.guild(ctx.guild).shortcuts()
+        if not sc:
+            await ctx.reply("No shortcuts defined yet. Use `shortcut add` to create one.", mention_author=True)
+            return
+        lines = [f"&{k}: {v}" for k, v in sorted(sc.items())]
+        preview = "\n".join(lines)
+        if len(preview) > 1900:
+            preview = preview[:1900] + "\n..."
+        await ctx.reply(f"**Shortcuts in this server:**\n```\n{preview}\n```", mention_author=True)
+
+    @shortcut.command(name="delete")
+    async def shortcut_delete(self, ctx, name: str):
+        """Delete a shortcut by name."""
+        async with self.config.guild(ctx.guild).shortcuts() as sc:
+            key = name.strip().lower()
+            if key in sc:
+                del sc[key]
+                await ctx.reply(f"Shortcut **&{key}** deleted.", mention_author=True)
+            else:
+                await ctx.reply(f"No shortcut named **&{key}**.", mention_author=True)
+
+    @shortcut.command(name="clear")
+    @commands.has_guild_permissions(manage_guild=True)
+    async def shortcut_clear(self, ctx):
+        """Clear all shortcuts (admin only)."""
+        await self.config.guild(ctx.guild).shortcuts.set({})
+        await ctx.reply("All shortcuts cleared for this server.", mention_author=True)
