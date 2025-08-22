@@ -28,10 +28,15 @@ class ImageGen(commands.Cog):
         default_global = {
             "api_url": "http://127.0.0.1:7860",
         }
+        default_guild = {
+            "shortcuts": {}  # { "samurai": "katana, armor, red scarf, -blood", ... }
+        }
         default_channel = {
             "loras": "(squchan:0.6), (j.k.:0.4), (fizintine:0.5),"
         }
+        
         self.config.register_global(**default_global)
+        self.config.register_guild(**default_guild)
         self.config.register_channel(**default_channel)
 
         # Initialize ImageGenerator without setting the API URL yet
