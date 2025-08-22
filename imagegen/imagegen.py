@@ -78,6 +78,11 @@ class ImageGen(commands.Cog):
         """Generate images with the Stable Diffusion WebUI."""
         task_id = uuid.uuid4().hex
 
+        if ctx.guild is not None:
+            guild_shortcuts = await self.config.guild(ctx.guild).shortcuts()
+        else:
+            guild_shortcuts = {}
+
         tokens: list[str] = []
         for tok in [token.strip() for token in text.split(",")]:
             tokens.extend(self._expand_amp_token(tok, guild_shortcuts))
@@ -456,9 +461,7 @@ class ImageGen(commands.Cog):
                     if result["complete"]:
                         break
                 await asyncio.sleep(1)
-
-    
-
+                
         await message.edit(content="Done!")
 
     @commands.group(name="shortcut")
