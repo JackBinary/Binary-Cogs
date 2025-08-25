@@ -142,6 +142,11 @@ class ImageGen(commands.Cog):
             "watermark",
             "signature",
             "patreon username",
+            "extra ears",
+            "paper texture",
+            "chinese text",
+            "text",
+            "signature",
             *prompt_config["negative"]
         ])
 
