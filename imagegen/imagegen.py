@@ -412,8 +412,19 @@ class ImageGen(commands.Cog):
         ]
 
         negative_prompt_tags = [
-            "bad quality", "worst quality", "worst detail",
-            "sketch", "censor", "watermark", "signature", "patreon username"
+            "bad quality",
+            "worst quality",
+            "worst detail",
+            "sketch",
+            "censor",
+            "watermark",
+            "signature",
+            "patreon username",
+            "extra ears",
+            "paper texture",
+            "chinese text",
+            "text",
+            "signature"
         ]
         if not is_nsfw:
             tag_list.insert(0, "general")
