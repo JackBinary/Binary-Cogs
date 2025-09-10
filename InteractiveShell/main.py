@@ -41,43 +41,49 @@ class InteractiveShell(commands.Cog):
     async def start_shell(self, ctx):
         """Start an interactive shell session."""
         self.log_attempt(ctx.author, "shell")
-
+    
         if ctx.author.id in self.sessions:
             await ctx.send("You already have an active shell session.")
             return
-
+    
         proc = await asyncio.create_subprocess_shell(
             "/bin/bash",
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-
+    
         self.sessions[ctx.author.id] = proc
         await ctx.send("Started interactive shell session. Type 'exit' to end the session.")
-
-        while True:
+    
+        async def reader(stream, label: str):
             try:
-                output = await proc.stdout.read(100)
-                if output:
-                    await ctx.send(f"```\n{output.decode()}\n```")
-
-                if proc.returncode is not None:
-                    await ctx.send("Shell session has ended.")
-                    del self.sessions[ctx.author.id]
-                    break
+                while True:
+                    chunk = await stream.read(200)
+                    if not chunk:
+                        break
+                    text = chunk.decode(errors="replace")
+                    # Prefix stderr so you know which is which
+                    prefix = "" if label == "stdout" else "[stderr]\n"
+                    await ctx.send(f"```\n{prefix}{text}\n```")
             except asyncio.CancelledError:
-                await ctx.send("Shell session was cancelled.")
-                break
-            except (ConnectionResetError, BrokenPipeError) as e:
-                await ctx.send(f"Shell process error: {e}")
-                break
-            except UnicodeDecodeError:
-                await ctx.send("Failed to decode shell output.")
-                break
-            except Exception as e:  # pylint: disable=broad-exception-caught
-                await ctx.send(f"Unexpected error: {e}")
-                break
+                pass
+            except Exception as e:
+                await ctx.send(f"{label} reader error: {e}")
+    
+        # Run both readers concurrently until the process exits
+        stdout_task = asyncio.create_task(reader(proc.stdout, "stdout"))
+        stderr_task = asyncio.create_task(reader(proc.stderr, "stderr"))
+    
+        try:
+            await proc.wait()  # Wait until the shell ends
+        finally:
+            stdout_task.cancel()
+            stderr_task.cancel()
+            if ctx.author.id in self.sessions:
+                del self.sessions[ctx.author.id]
+            await ctx.send("Shell session has ended.")
+
 
     @commands.Cog.listener()
     async def on_message(self, message):
